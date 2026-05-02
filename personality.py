@@ -67,8 +67,9 @@ def generate_speech(trigger, mood, sensor_state):
     messages = context + [{"role": "user", "content": user_message}]
 
     response = client.chat.completions.create(
-    max_tokens=150,
-    messages=[{"role": "system", "content": system}] + messages
+        model=model,
+        max_tokens=150,
+        messages=[{"role": "system", "content": system}] + messages
     )
     text = response.choices[0].message.content.strip()
     # Store in DB
