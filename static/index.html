@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoAdapt</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #0c0f0a;
+  --s1:       #131710;
+  --s2:       #1a1f16;
+  --s3:       #21271c;
+  --border:   #2a3324;
+  --text:     #d8e4cc;
+  --muted:    #6b7d5e;
+  --green:    #7ec44f;
+  --green2:   #4a8c28;
+  --amber:    #d4a843;
+  --amber2:   #a07828;
+  --teal:     #4bbfa0;
+  --red:      #c85a4a;
+  --purple:   #9b7fe8;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--s1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--green);
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-leaf {
+  width: 28px;
+  height: 28px;
+  background: var(--green2);
+  border-radius: 50% 0 50% 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bridge-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+
+.status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-dot.offline { background: var(--red); }
+
+.plant-name-display {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--amber);
+}
+
+/* Nav tabs */
+nav {
+  display: flex;
+  gap: 0;
+  padding: 0 32px;
+  background: var(--s1);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-tab {
+  padding: 12px 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font-family: 'DM Mono', monospace;
+}
+
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+/* Main content */
+main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── LIVE PANEL ── */
+.live-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .live-grid { grid-template-columns: 1fr; }
+  header { padding: 16px 20px; }
+  nav { padding: 0 20px; }
+  main { padding: 20px; }
+}
+
+/* Sensor card */
+.sensor-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sensor-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  opacity: 0.4;
+}
+
+.sensor-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 12px;
+}
+
+.sensor-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 42px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.sensor-unit {
+  font-size: 16px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.sensor-bar {
+  height: 4px;
+  background: var(--s3);
+  border-radius: 2px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.sensor-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease;
+}
+
+.bar-green { background: linear-gradient(90deg, var(--green2), var(--green)); }
+.bar-amber { background: linear-gradient(90deg, var(--amber2), var(--amber)); }
+.bar-teal  { background: linear-gradient(90deg, #2a8a74, var(--teal)); }
+.bar-red   { background: linear-gradient(90deg, #8a3a2c, var(--red)); }
+
+/* Moisture gauge - circular */
+.moisture-card {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.gauge-wrap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+.gauge-wrap svg { transform: rotate(-90deg); }
+
+.gauge-bg { fill: none; stroke: var(--s3); stroke-width: 10; }
+.gauge-fill {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+}
+
+.gauge-pct {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.moisture-info { flex: 1; }
+.moisture-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  color: var(--green);
+  margin-bottom: 6px;
+}
+
+.moisture-status {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+
+.mood-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  font-weight: 500;
+  border: 1px solid;
+}
+
+.mood-happy    { background: #1a3316; color: var(--green); border-color: var(--green2); }
+.mood-thirsty  { background: #2a1f0a; color: var(--amber); border-color: var(--amber2); }
+.mood-overwatered { background: #0a2535; color: var(--teal); border-color: #2a7560; }
+.mood-cold     { background: #0a1535; color: #7ab4e8; border-color: #2a5080; }
+.mood-hot      { background: #2a1410; color: var(--red); border-color: #7a3428; }
+.mood-dim      { background: #2a2510; color: #d4c843; border-color: #807828; }
+.mood-neutral  { background: var(--s2); color: var(--muted); border-color: var(--border); }
+
+/* Sensor row */
+.sensor-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+/* Speech bubble */
+.speech-section {
+  margin-top: 20px;
+}
+
+.speech-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  position: relative;
+}
+
+.speech-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.plant-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50% 0 50% 0;
+  background: var(--green2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.speech-meta { flex: 1; }
+.speech-plant-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  color: var(--amber);
+}
+
+.speech-time {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.speech-text {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.7;
+  color: var(--text);
+  min-height: 28px;
+}
+
+.speech-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 18px;
+  background: var(--green);
+  margin-left: 3px;
+  vertical-align: middle;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink { 0%,50% { opacity:1 } 51%,100% { opacity:0 } }
+
+.speech-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  color: var(--text);
+  font-size: 12px;
+  font-family: 'DM Mono', monospace;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn:hover { border-color: var(--green); color: var(--green); }
+.btn-green { background: var(--green2); border-color: var(--green); color: #d8f4b8; }
+.btn-green:hover { background: #3a7020; }
+
+/* Chat section */
+.chat-section {
+  margin-top: 20px;
+}
+
+.chat-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.chat-messages {
+  height: 240px;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.chat-messages::-webkit-scrollbar { width: 4px; }
+.chat-messages::-webkit-scrollbar-track { background: transparent; }
+.chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.chat-msg {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  animation: fadeUp 0.3s ease;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.chat-msg.user {
+  align-self: flex-end;
+  background: var(--green2);
+  color: #d8f4b8;
+  border-bottom-right-radius: 3px;
+}
+
+.chat-msg.plant {
+  align-self: flex-start;
+  background: var(--s2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 3px;
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+
+.chat-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 14px 16px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+}
+
+.chat-input::placeholder { color: var(--muted); }
+
+.chat-send {
+  padding: 0 20px;
+  background: var(--green2);
+  border: none;
+  border-left: 1px solid var(--border);
+  color: #d8f4b8;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.chat-send:hover { background: #3a7020; }
+
+/* Recommendations */
+.recs-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.recs-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 12px;
+}
+
+.rec-item {
+  font-size: 13px;
+  color: var(--text);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.5;
+}
+
+.rec-item:last-child { border-bottom: none; }
+
+/* ── HISTORY PANEL ── */
+.history-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.range-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  color: var(--muted);
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.range-btn.active { border-color: var(--green); color: var(--green); background: #1a3316; }
+
+.chart-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.chart-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 16px;
+}
+
+.chart-wrap { position: relative; height: 180px; }
+
+/* Speech log */
+.speech-log {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.log-entry {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.log-time {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.log-text {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ── SETTINGS PANEL ── */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) { .settings-grid { grid-template-columns: 1fr; } }
+
+.settings-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.settings-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  color: var(--amber);
+  margin-bottom: 18px;
+}
+
+.form-group { margin-bottom: 16px; }
+
+.form-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--green);
+}
+
+.form-select option { background: var(--s2); }
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-style: italic;
+}
+
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.form-range {
+  flex: 1;
+  accent-color: var(--green);
+}
+
+.range-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--green);
+  min-width: 52px;
+  text-align: right;
+}
+
+/* Mode buttons */
+.mode-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mode-btn.active.demo   { background: #2a1f0a; color: var(--amber); border-color: var(--amber2); }
+.mode-btn.active.normal { background: #1a3316; color: var(--green); border-color: var(--green2); }
+.mode-btn.active.eco    { background: #0a2535; color: var(--teal); border-color: #2a7560; }
+
+/* Pod commands */
+.cmd-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cmd-btn {
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cmd-btn:hover { border-color: var(--green); color: var(--green); }
+.cmd-btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+.save-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--green2);
+  color: #d8f4b8;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.save-btn:hover { background: #3a7020; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--s2);
+  border: 1px solid var(--green2);
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 12px;
+  font-family: 'DM Mono', monospace;
+  color: var(--green);
+  z-index: 999;
+  transform: translateY(80px);
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.toast.show { transform: translateY(0); opacity: 1; }
+
+/* Personality preview */
+.personality-preview {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 6px;
+  line-height: 1.5;
+  padding: 8px;
+  background: var(--s2);
+  border-radius: 4px;
+  border-left: 2px solid var(--green2);
+}
+
+/* Volume */
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.vol-icon { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-leaf">🌿</div>
+    EcoAdapt
+  </div>
+  <div class="header-right">
+    <div class="plant-name-display" id="headerPlantName">My Plant</div>
+    <div class="bridge-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">connecting</span>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <button class="nav-tab" onclick="switchTab('pet')">Pet</button>
+  <button class="nav-tab active" onclick="switchTab('live')">Live</button>
+  <button class="nav-tab" onclick="switchTab('history')">History</button>
+  <button class="nav-tab" onclick="switchTab('settings')">Settings</button>
+</nav>
+
+<main>
+
+  <!-- ═══ LIVE TAB ═══ -->
+  <div class="tab-panel active" id="tab-live">
+    <div class="live-grid">
+
+      <!-- Moisture gauge -->
+      <div class="sensor-card moisture-card">
+        <div class="gauge-wrap">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <circle class="gauge-bg" cx="70" cy="70" r="56"/>
+            <circle class="gauge-fill" id="gaugeFill" cx="70" cy="70" r="56"
+              stroke-dasharray="351.86"
+              stroke-dashoffset="351.86"/>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-num" id="moistureVal">--</div>
+            <div class="gauge-pct">%</div>
+          </div>
+        </div>
+        <div class="moisture-info">
+          <div class="moisture-title">Soil Moisture</div>
+          <div class="moisture-status" id="moistureStatus">Waiting for reading...</div>
+          <div class="mood-badge mood-neutral" id="moodBadge">⏳ waiting</div>
+        </div>
+      </div>
+
+      <!-- Sensor row -->
+      <div class="sensor-row" style="grid-column:1/-1">
+
+        <div class="sensor-card">
+          <div class="sensor-label">Temperature</div>
+          <div class="sensor-value" id="tempVal">--<span class="sensor-unit">°C</span></div>
+          <div class="sensor-bar"><div class="sensor-bar-fill bar-amber" id="tempBar" style="width:0%"></div></div>
+        </div>
+
+        <div class="sensor-card">
+          <div class="sensor-label">Light</div>
+          <div class="sensor-value" id="lightVal">--<span class="sensor-unit">lux</span></div>
+          <div class="sensor-bar"><div class="sensor-bar-fill bar-teal" id="lightBar" style="width:0%"></div></div>
+        </div>
+
+        <div class="sensor-card">
+          <div class="sensor-label">Pod Battery</div>
+          <div class="sensor-value" id="battVal">--<span class="sensor-unit">%</span></div>
+          <div class="sensor-bar"><div class="sensor-bar-fill bar-green" id="battBar" style="width:0%"></div></div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Speech bubble -->
+    <div class="speech-section">
+      <div class="speech-card">
+        <div class="speech-header">
+          <div class="plant-avatar" id="plantAvatar">🌿</div>
+          <div class="speech-meta">
+            <div class="speech-plant-name" id="speechPlantName">My Plant</div>
+            <div class="speech-time" id="speechTime">—</div>
+          </div>
+          <button class="btn" onclick="requestCheckin()" title="Ask plant to speak">💬 Speak</button>
+          <button class="btn" onclick="toggleTTS()" id="ttsBtn" title="Toggle voice">🔊 Voice</button>
+        </div>
+        <div class="speech-text" id="speechText">
+          <em style="color:var(--muted);font-style:italic">Waiting for your plant to say something...</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-section">
+      <div class="chat-card">
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-msg plant" style="font-style:italic;opacity:0.6">Talk to your plant...</div>
+        </div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="chatInput" placeholder="Say something to your plant..." 
+                 onkeydown="if(event.key==='Enter') sendChat()">
+          <button class="chat-send" onclick="sendChat()">↑</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="recs-card">
+      <div class="recs-title">Care Recommendations</div>
+      <div id="recsList">
+        <div class="rec-item" style="color:var(--muted)">Loading recommendations...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ HISTORY TAB ═══ -->
+  <div class="tab-panel" id="tab-history">
+    <div class="history-controls">
+      <button class="range-btn active" onclick="loadHistory(24, this)">24h</button>
+      <button class="range-btn" onclick="loadHistory(168, this)">7d</button>
+      <button class="range-btn" onclick="loadHistory(720, this)">30d</button>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Soil Moisture (%)</div>
+      <div class="chart-wrap"><canvas id="moistureChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Temperature (°C)</div>
+      <div class="chart-wrap"><canvas id="tempChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Light (lux)</div>
+      <div class="chart-wrap"><canvas id="lightChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Plant Speech Log</div>
+      <div class="speech-log" id="speechLog">
+        <div style="font-size:12px;color:var(--muted)">No speech recorded yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SETTINGS TAB ═══ -->
+  <div class="tab-panel" id="tab-settings">
+    <div class="settings-grid">
+
+      <!-- Plant identity -->
+      <div class="settings-card">
+        <div class="settings-title">Plant Identity</div>
+
+        <div class="form-group">
+          <label class="form-label">Plant Name</label>
+          <input class="form-input" id="plantName" placeholder="e.g. Gerald">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Species</label>
+          <select class="form-select" id="speciesSelect" onchange="updatePersonalityPreview()">
+            <option value="">Loading...</option>
+          </select>
+          <div class="personality-preview" id="personalityPreview"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">AI Model</label>
+          <select class="form-select" id="modelSelect">
+            <option value="mistralai/mistral-nemo">Mistral Nemo (recommended ⭐)</option>
+            <option value="mistralai/mistral-7b-instruct">Mistral 7B</option>
+            <option value="mistralai/mixtral-8x7b-instruct">Mixtral 8x7B</option>
+            <option value="anthropic/claude-haiku-4-5">Claude Haiku (fast)</option>
+            <option value="anthropic/claude-sonnet-4-6">Claude Sonnet (smart)</option>
+            <option value="google/gemini-flash-1.5">Gemini Flash 1.5</option>
+            <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
+            <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 8B</option>
+            <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+            <option value="deepseek/deepseek-chat">DeepSeek V3</option>
+            <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+            <option value="qwen/qwen-2.5-72b-instruct">Qwen 2.5 72B</option>
+            <option value="nvidia/llama-3.1-nemotron-70b-instruct">Nemotron 70B</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Custom Personality (optional override)</label>
+          <textarea class="form-textarea" id="customPersonality"
+                    placeholder="Describe your plant's personality..."></textarea>
+        </div>
+
+        <button class="save-btn" onclick="savePlantConfig()">Save Plant Config</button>
+      </div>
+
+      <!-- Pod settings -->
+      <div class="settings-card">
+        <div class="settings-title">Pod Settings</div>
+
+        <div class="form-group">
+          <label class="form-label">Mode</label>
+          <div class="mode-buttons">
+            <button class="mode-btn demo" onclick="setMode('DEMO')" id="modeDemo">Demo</button>
+            <button class="mode-btn normal active" onclick="setMode('NORMAL')" id="modeNormal">Normal</button>
+            <button class="mode-btn eco" onclick="setMode('ECO')" id="modeEco">Eco</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Read Interval</label>
+          <div class="range-row">
+            <input type="range" class="form-range" id="readInterval"
+                  min="60" max="3600" step="60" value="300"
+                  oninput="document.getElementById('readIntervalVal').textContent=formatInterval(this.value)">
+            <span class="range-val" id="readIntervalVal">5 min</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Command Check Interval</label>
+          <div class="range-row">
+            <input type="range" class="form-range" id="checkInterval"
+                  min="10" max="300" step="10" value="30"
+                  oninput="document.getElementById('checkIntervalVal').textContent=formatInterval(this.value)">
+            <span class="range-val" id="checkIntervalVal">30 sec</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Voice Volume</label>
+          <div class="volume-row">
+            <span class="vol-icon">🔈</span>
+            <input type="range" class="form-range" id="volumeSlider"
+                  min="0" max="1" step="0.1" value="0.8"
+                  oninput="ttsVolume=parseFloat(this.value)">
+            <span class="vol-icon">🔊</span>
+          </div>
+        </div>
+
+        <button class="save-btn" onclick="savePodSettings()">Save Pod Settings</button>
+      </div>
+
+      <!-- Pod commands -->
+      <div class="settings-card">
+        <div class="settings-title">Pod Commands</div>
+        <div class="cmd-buttons">
+          <button class="cmd-btn" onclick="sendCommand('FORCE_READ')">
+            📡 Force Reading Now
+          </button>
+          <button class="cmd-btn" onclick="sendCommand('REBOOT')">
+            🔄 Reboot Pod
+          </button>
+          <button class="cmd-btn danger" onclick="sendCommand('SLEEP')">
+            😴 Sleep Pod Indefinitely
+          </button>
+          <button class="cmd-btn danger" onclick="sendCommand('RESET_CONFIG')">
+            ⚠️ Reset Pod Config
+          </button>
+        </div>
+      </div>
+
+      <!-- About -->
+      <div class="settings-card">
+        <div class="settings-title">About EcoAdapt</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          <p>A living plant companion system.</p>
+          <br>
+          <p>Your plant monitors itself and speaks to you through AI-powered personality.</p>
+          <br>
+          <p style="font-family:'DM Mono',monospace;font-size:10px">
+            Pod → ESP-NOW → Bridge → Server → You
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ PET TAB ═══ -->
+  <div class="tab-panel" id="tab-pet">
+
+    <!-- Stage + happiness -->
+    <div class="live-grid">
+
+      <div class="sensor-card" style="text-align:center;padding:32px 20px">
+        <div id="stageEmoji" style="font-size:72px;line-height:1;margin-bottom:12px">🌰</div>
+        <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--green)" id="stageName">Seed</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace" id="stageDesc">Just starting out.</div>
+        <div style="margin-top:20px">
+          <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:6px;letter-spacing:0.1em;text-transform:uppercase">XP to next stage</div>
+          <div style="background:var(--s3);border-radius:4px;height:6px;overflow:hidden">
+            <div id="xpBar" style="height:100%;background:linear-gradient(90deg,var(--green2),var(--green));border-radius:4px;transition:width 1s ease;width:0%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px">
+            <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="xpVal">0 XP</span>
+            <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="nextStageVal">100 XP</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sensor-card">
+        <div class="sensor-label">Happiness</div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:48px;font-weight:500;color:var(--text)" id="happinessVal">100</div>
+          <div>
+            <div style="font-size:20px" id="happinessEmoji">😊</div>
+            <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px" id="moodLabel">happy</div>
+          </div>
+        </div>
+        <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
+          <div id="happinessBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:100%;background:linear-gradient(90deg,var(--green2),var(--green))"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Needs bars -->
+    <div class="sensor-card" style="margin-top:20px">
+      <div class="sensor-label" style="margin-bottom:16px">Needs</div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:12px;color:var(--text)">💧 Thirst (hydration)</span>
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--green)" id="thirstVal">--</span>
+          </div>
+          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
+            <div id="thirstBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,#1a5080,var(--teal))"></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:12px;color:var(--text)">☀️ Energy (light)</span>
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--amber)" id="energyVal">--</span>
+          </div>
+          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
+            <div id="energyBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,var(--amber2),var(--amber))"></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:12px;color:var(--text)">🌡️ Comfort (temperature)</span>
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--purple)" id="comfortVal">--</span>
+          </div>
+          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
+            <div id="comfortBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,#3a2a6a,var(--purple))"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Stage progression -->
+    <div class="sensor-card" style="margin-top:20px">
+      <div class="sensor-label" style="margin-bottom:16px">Life Stages</div>
+      <div style="display:flex;gap:0;position:relative" id="stagesRow">
+      </div>
+    </div>
+
+    <!-- Care log -->
+    <div class="sensor-card" style="margin-top:20px">
+      <div class="sensor-label" style="margin-bottom:12px">Care Log</div>
+      <div id="careLog" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;color:var(--muted)">No care actions recorded yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════
+// STATE
+// ═══════════════════════════════════
+let ttsEnabled = true;
+let ttsVolume  = 0.8;
+let currentMode = "NORMAL";
+let species = [];
+let charts = {};
+
+// ═══════════════════════════════════
+// SOCKET.IO
+// ═══════════════════════════════════
+const socket = io();
+
+socket.on("connect", () => {
+  setStatus(true);
+});
+
+socket.on("disconnect", () => {
+  setStatus(false);
+});
+
+socket.on("reading", (data) => {
+  updateReadings(data);
+  loadRecommendations();
+});
+
+socket.on("speech", (data) => {
+  showSpeech(data.text, data.mood);
+  if (ttsEnabled) speak(data.text);
+});
+
+socket.on("bridge_status", (data) => {
+  setStatus(data.online);
+});
+
+socket.on("tamagotchi", (data) => {
+  updateTamagotchi(data);
+});
+
+// ═══════════════════════════════════
+// STATUS
+// ═══════════════════════════════════
+function setStatus(online) {
+  const dot  = document.getElementById("statusDot");
+  const text = document.getElementById("statusText");
+  dot.className  = "status-dot " + (online ? "online" : "offline");
+  text.textContent = online ? "bridge online" : "bridge offline";
+}
+
+// ═══════════════════════════════════
+// READINGS
+// ═══════════════════════════════════
+function updateReadings(d) {
+  // Moisture gauge
+  const m = d.moisture ?? 0;
+  document.getElementById("moistureVal").textContent = Math.round(m);
+  const circ = 2 * Math.PI * 56; // 351.86
+  const offset = circ - (m / 100) * circ;
+  document.getElementById("gaugeFill").style.strokeDashoffset = offset;
+
+  // Gauge color
+  const fill = document.getElementById("gaugeFill");
+  if (m < 20)      fill.style.stroke = "var(--red)";
+  else if (m < 40) fill.style.stroke = "var(--amber)";
+  else             fill.style.stroke = "var(--green)";
+
+  // Moisture status text
+  const statuses = {
+    low:  "Soil is dry — consider watering soon.",
+    ok:   "Moisture level is healthy.",
+    high: "Soil is quite wet — hold off watering."
+  };
+  document.getElementById("moistureStatus").textContent =
+    m < 30 ? statuses.low : m > 70 ? statuses.high : statuses.ok;
+
+  // Temp
+  const t = d.temperature ?? 0;
+  document.getElementById("tempVal").innerHTML =
+    `${t.toFixed(1)}<span class="sensor-unit">°C</span>`;
+  document.getElementById("tempBar").style.width =
+    Math.min(100, ((t - 5) / 35) * 100) + "%";
+
+  // Light
+  const l = d.light ?? 0;
+  document.getElementById("lightVal").innerHTML =
+    `${Math.round(l).toLocaleString()}<span class="sensor-unit">lux</span>`;
+  document.getElementById("lightBar").style.width =
+    Math.min(100, (l / 20000) * 100) + "%";
+
+  // Battery
+  const b = d.battery ?? 100;
+  document.getElementById("battVal").innerHTML =
+    `${Math.round(b)}<span class="sensor-unit">%</span>`;
+  const battFill = document.getElementById("battBar");
+  battFill.style.width = b + "%";
+  battFill.className = "sensor-bar-fill " +
+    (b < 20 ? "bar-red" : b < 50 ? "bar-amber" : "bar-green");
+}
+
+// ═══════════════════════════════════
+// SPEECH
+// ═══════════════════════════════════
+function showSpeech(text, mood) {
+  const el = document.getElementById("speechText");
+  const timeEl = document.getElementById("speechTime");
+  const badge = document.getElementById("moodBadge");
+
+  el.innerHTML = "";
+  timeEl.textContent = new Date().toLocaleTimeString();
+
+  const moodEmoji = {
+    happy: "🌿", thirsty: "💧", overwatered: "🌊",
+    cold: "❄️", hot: "🔥", dim: "🌑", bright: "☀️", neutral: "💭"
+  };
+
+  badge.className = `mood-badge mood-${mood || "neutral"}`;
+  badge.textContent = `${moodEmoji[mood] || "💭"} ${mood || "neutral"}`;
+
+  // Typewriter
+  let i = 0;
+  const cursor = document.createElement("span");
+  cursor.className = "speech-cursor";
+  el.appendChild(cursor);
+
+  const interval = setInterval(() => {
+    if (i < text.length) {
+      el.insertBefore(document.createTextNode(text[i]), cursor);
+      i++;
+    } else {
+      clearInterval(interval);
+      cursor.remove();
+    }
+  }, 28);
+
+  // Add to chat
+  addChatMessage("plant", text);
+}
+
+// ═══════════════════════════════════
+// TTS
+// ═══════════════════════════════════
+function speak(text) {
+  if (!ttsEnabled || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.volume = ttsVolume;
+  utt.rate   = 0.92;
+  utt.pitch  = 1.0;
+
+  // Pick a nice voice
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(v =>
+    v.name.includes("Samantha") || v.name.includes("Karen") ||
+    v.name.includes("Google UK") || v.name.includes("Fiona")
+  );
+  if (preferred) utt.voice = preferred;
+
+  window.speechSynthesis.speak(utt);
+}
+
+function toggleTTS() {
+  ttsEnabled = !ttsEnabled;
+  document.getElementById("ttsBtn").textContent =
+    ttsEnabled ? "🔊 Voice" : "🔇 Voice";
+  showToast(ttsEnabled ? "Voice on" : "Voice off");
+}
+
+// ═══════════════════════════════════
+// CHAT
+// ═══════════════════════════════════
+function addChatMessage(role, text) {
+  const container = document.getElementById("chatMessages");
+  const msg = document.createElement("div");
+  msg.className = `chat-msg ${role}`;
+  msg.textContent = text;
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById("chatInput");
+  const text = input.value.trim();
+  if (!text) return;
+
+  addChatMessage("user", text);
+  input.value = "";
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+    if (data.response) {
+      showSpeech(data.response, "neutral");
+      if (ttsEnabled) speak(data.response);
+    }
+  } catch(e) {
+    addChatMessage("plant", "...(no response)");
+  }
+}
+
+// ═══════════════════════════════════
+// RECOMMENDATIONS
+// ═══════════════════════════════════
+async function loadRecommendations() {
+  const res = await fetch("/api/recommendations");
+  const data = await res.json();
+  const list = document.getElementById("recsList");
+  list.innerHTML = data.map(r =>
+    `<div class="rec-item">${r}</div>`
+  ).join("");
+}
+
+// ═══════════════════════════════════
+// CHECKIN
+// ═══════════════════════════════════
+async function requestCheckin() {
+  const res = await fetch("/api/checkin", { method: "POST" });
+  const data = await res.json();
+  if (data.speech) {
+    showSpeech(data.speech, "neutral");
+    if (ttsEnabled) speak(data.speech);
+  }
+}
+
+// ═══════════════════════════════════
+// HISTORY / CHARTS
+// ═══════════════════════════════════
+const chartConfig = (label, color, data, labels) => ({
+  type: "line",
+  data: {
+    labels,
+    datasets: [{
+      label,
+      data,
+      borderColor: color,
+      backgroundColor: color + "18",
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.4,
+      fill: true
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 400 },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        ticks: { color: "#6b7d5e", font: { family: "DM Mono", size: 9 }, maxTicksLimit: 8 },
+        grid: { color: "#2a3324" }
+      },
+      y: {
+        ticks: { color: "#6b7d5e", font: { family: "DM Mono", size: 9 } },
+        grid: { color: "#2a3324" }
+      }
+    }
+  }
+});
+
+async function loadHistory(hours, btn) {
+  document.querySelectorAll(".range-btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+
+  const res = await fetch(`/api/history?hours=${hours}`);
+  const data = await res.json();
+
+  if (!data.length) return;
+
+  const labels = data.map(d => {
+    const dt = new Date(d.timestamp);
+    return hours <= 24
+      ? dt.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})
+      : dt.toLocaleDateString([], {month:"short",day:"numeric"});
+  });
+
+  const update = (id, key, label, color) => {
+    const vals = data.map(d => d[key]);
+    if (charts[id]) {
+      charts[id].data.labels = labels;
+      charts[id].data.datasets[0].data = vals;
+      charts[id].update();
+    } else {
+      charts[id] = new Chart(
+        document.getElementById(id),
+        chartConfig(label, color, vals, labels)
+      );
+    }
+  };
+
+  update("moistureChart", "moisture",    "Moisture %",   "#7ec44f");
+  update("tempChart",     "temperature", "Temp °C",      "#d4a843");
+  update("lightChart",    "light",       "Light lux",    "#4bbfa0");
+
+  // Speech log
+  const logRes  = await fetch("/api/utterances?limit=20");
+  const logData = await logRes.json();
+  const logEl   = document.getElementById("speechLog");
+
+  if (!logData.length) {
+    logEl.innerHTML = `<div style="font-size:12px;color:var(--muted)">No speech recorded yet.</div>`;
+    return;
+  }
+
+  logEl.innerHTML = logData.map(u => `
+    <div class="log-entry">
+      <div class="log-time">${new Date(u.timestamp).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+      <div class="log-text">${u.text}</div>
+    </div>
+  `).join("");
+}
+
+// ═══════════════════════════════════
+// SETTINGS — SPECIES
+// ═══════════════════════════════════
+async function loadSpecies() {
+  const res  = await fetch("/api/species");
+  species    = await res.json();
+  const sel  = document.getElementById("speciesSelect");
+  sel.innerHTML = species.map(s =>
+    `<option value="${s.id}">${s.name}</option>`
+  ).join("");
+  updatePersonalityPreview();
+}
+
+function updatePersonalityPreview() {
+  const id = document.getElementById("speciesSelect").value;
+  const s  = species.find(x => x.id === id);
+  document.getElementById("personalityPreview").textContent =
+    s ? s.personality_preview : "";
+}
+
+async function loadPlantConfig() {
+  const res  = await fetch("/api/plant");
+  const data = await res.json();
+
+  document.getElementById("plantName").value         = data.name || "";
+  document.getElementById("customPersonality").value = data.personality || "";
+  document.getElementById("readInterval").value      = data.read_interval || 300;
+  document.getElementById("checkInterval").value     = data.check_interval || 30;
+  document.getElementById("readIntervalVal").textContent  = formatInterval(data.read_interval || 300);
+  document.getElementById("checkIntervalVal").textContent = formatInterval(data.check_interval || 30);
+  document.getElementById("headerPlantName").textContent  = data.name || "My Plant";
+  document.getElementById("speechPlantName").textContent  = data.name || "My Plant";
+
+  if (data.species) {
+    document.getElementById("speciesSelect").value = data.species;
+    updatePersonalityPreview();
+  }
+
+  if (data.model) {
+    document.getElementById("modelSelect").value = data.model;
+  }
+
+  setModeUI(data.mode || "NORMAL");
+  currentMode = data.mode || "NORMAL";
+}
+
+async function savePlantConfig() {
+  const payload = {
+    name:        document.getElementById("plantName").value,
+    species:     document.getElementById("speciesSelect").value,
+    personality: document.getElementById("customPersonality").value,
+    model:       document.getElementById("modelSelect").value,
+  };
+
+  await fetch("/api/plant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  document.getElementById("headerPlantName").textContent  = payload.name || "My Plant";
+  document.getElementById("speechPlantName").textContent  = payload.name || "My Plant";
+  showToast("Plant config saved ✓");
+}
+
+async function savePodSettings() {
+  const payload = {
+    read_interval:  parseInt(document.getElementById("readInterval").value),
+    check_interval: parseInt(document.getElementById("checkInterval").value),
+    mode: currentMode
+  };
+
+  await fetch("/api/plant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  showToast("Pod settings saved ✓");
+}
+
+// ═══════════════════════════════════
+// MODE
+// ═══════════════════════════════════
+const MODE_PRESETS = {
+  DEMO:   { read: 60,   check: 10  },
+  NORMAL: { read: 300,  check: 30  },
+  ECO:    { read: 1800, check: 300 }
+};
+
+function setMode(mode) {
+  currentMode = mode;
+  setModeUI(mode);
+  const p = MODE_PRESETS[mode];
+  if (p) {
+    document.getElementById("readInterval").value  = p.read;
+    document.getElementById("checkInterval").value = p.check;
+    document.getElementById("readIntervalVal").textContent  = formatInterval(p.read);
+    document.getElementById("checkIntervalVal").textContent = formatInterval(p.check);
+  }
+}
+
+function setModeUI(mode) {
+  ["DEMO","NORMAL","ECO"].forEach(m => {
+    const btn = document.getElementById("mode" + m.charAt(0) + m.slice(1).toLowerCase());
+    if (btn) btn.classList.toggle("active", m === mode);
+  });
+}
+
+// ═══════════════════════════════════
+// COMMANDS
+// ═══════════════════════════════════
+async function sendCommand(cmd) {
+  await fetch("/api/command", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command: cmd })
+  });
+  showToast(`Command queued: ${cmd}`);
+}
+
+// ═══════════════════════════════════
+// TABS
+// ═══════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  event.target.classList.add("active");
+  if (name === "history") loadHistory(24, document.querySelector(".range-btn"));
+  if (name === "pet") loadTamagotchi();
+}
+
+// ═══════════════════════════════════
+// UTILS
+// ═══════════════════════════════════
+function formatInterval(s) {
+  s = parseInt(s);
+  if (s < 60)   return `${s} sec`;
+  if (s < 3600) return `${Math.round(s/60)} min`;
+  return `${(s/3600).toFixed(1)} hr`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+// ═══════════════════════════════════
+// TAMAGOTCHI
+// ═══════════════════════════════════
+async function loadTamagotchi() {
+  const res  = await fetch("/api/tamagotchi");
+  const data = await res.json();
+  updateTamagotchi(data);
+}
+
+function updateTamagotchi(data) {
+  if (!data) return;
+
+  // Stage
+  const stage = data.stage;
+  document.getElementById("stageEmoji").textContent = stage.emoji;
+  document.getElementById("stageName").textContent  = stage.name;
+  document.getElementById("stageDesc").textContent  = stage.desc;
+
+  // XP bar
+  document.getElementById("xpBar").style.width = data.xp_progress + "%";
+  document.getElementById("xpVal").textContent = Math.round(data.xp) + " XP";
+  document.getElementById("nextStageVal").textContent =
+    data.next_stage ? data.next_stage.xp_required + " XP" : "MAX";
+
+  // Happiness
+  const h = data.happiness;
+  document.getElementById("happinessVal").textContent = Math.round(h);
+  document.getElementById("happinessBar").style.width = h + "%";
+  document.getElementById("happinessBar").style.background =
+    h > 60 ? "linear-gradient(90deg,var(--green2),var(--green))" :
+    h > 30 ? "linear-gradient(90deg,var(--amber2),var(--amber))" :
+             "linear-gradient(90deg,#8a3a2c,var(--red))";
+
+  const moodEmojis = {
+    happy: "😊", content: "🙂", uneasy: "😕",
+    distressed: "😟", critical: "😰"
+  };
+  document.getElementById("happinessEmoji").textContent = moodEmojis[data.mood] || "🙂";
+  document.getElementById("moodLabel").textContent = data.mood;
+
+  // Needs
+  const needs = data.needs;
+  const setNeed = (id, val, barId) => {
+    document.getElementById(id).textContent = Math.round(val) + "%";
+    document.getElementById(barId).style.width = val + "%";
+  };
+  setNeed("thirstVal",  needs.thirst,  "thirstBar");
+  setNeed("energyVal",  needs.energy,  "energyBar");
+  setNeed("comfortVal", needs.comfort, "comfortBar");
+
+  // Stages row
+  const row = document.getElementById("stagesRow");
+  row.innerHTML = data.stages.map(s => `
+    <div style="flex:1;text-align:center;padding:10px 4px;border-radius:8px;
+                background:${data.xp >= s.xp_required ? 'var(--green-dim,#1a3316)' : 'var(--s2)'};
+                border:1px solid ${data.xp >= s.xp_required ? 'var(--green2)' : 'var(--border)'};
+                margin:0 3px">
+      <div style="font-size:22px">${s.emoji}</div>
+      <div style="font-size:10px;font-family:'DM Mono',monospace;
+                  color:${data.xp >= s.xp_required ? 'var(--green)' : 'var(--muted)'};
+                  margin-top:4px">${s.name}</div>
+    </div>
+  `).join("");
+
+  // Update avatar everywhere
+  document.getElementById("plantAvatar").textContent = stage.emoji;
+}
+
+// ═══════════════════════════════════
+// INIT
+// ═══════════════════════════════════
+async function init() {
+  await loadSpecies();
+  await loadPlantConfig();
+  await loadRecommendations();
+  await loadTamagotchi();
+
+  // Load initial reading
+  const res  = await fetch("/api/readings");
+  const data = await res.json();
+  if (data.moisture !== undefined) updateReadings(data);
+
+  // Load last utterance
+  const uttRes  = await fetch("/api/utterances?limit=1");
+  const uttData = await uttRes.json();
+  if (uttData.length) showSpeech(uttData[0].text, uttData[0].mood);
+
+  // Load chat history
+  const chatRes  = await fetch("/api/history?hours=24");
+}
+
+init();
+</script>
+</body>
+</html>
