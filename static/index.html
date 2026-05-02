@@ -1180,7 +1180,8 @@ let charts = {};
 const socket = io();
 
 socket.on("connect", () => {
-  setStatus(true);
+  // Don't assume bridge is online just because dashboard connected
+  // Let the poller determine actual bridge status
 });
 
 socket.on("disconnect", () => {
@@ -1708,6 +1709,18 @@ async function init() {
   await loadRecommendations();
   await loadTamagotchi();
 
+  // Check bridge status immediately on load
+  const bridgeRes = await fetch("/api/bridge_online");
+  const bridgeData = await bridgeRes.json();
+  setStatus(bridgeData.online);
+
+  // Then poll every 30 seconds
+  setInterval(async () => {
+    const res = await fetch("/api/bridge_online");
+    const data = await res.json();
+    setStatus(data.online);
+  }, 30000);
+
   // Load initial reading
   const res  = await fetch("/api/readings");
   const data = await res.json();
@@ -1720,6 +1733,7 @@ async function init() {
 
   // Load chat history
   const chatRes  = await fetch("/api/history?hours=24");
+
 }
 
 init();

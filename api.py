@@ -8,6 +8,10 @@ from db import (
 from species import list_species
 from thresholds import check_reading, get_mood, get_recommendations
 from personality import generate_speech, respond_to_user
+import time
+
+_last_bridge_seen = 0
+_bridge_heartbeat_interval = 60  # default assumption
 
 api = Blueprint("api", __name__)
 
@@ -66,10 +70,14 @@ def tamagotchi_state():
 
 @api.route("/api/status", methods=["POST"])
 def bridge_status():
+    global _last_bridge_seen, _bridge_heartbeat_interval
+    _last_bridge_seen = time.time()
+    data = request.get_json() or {}
+    if "interval" in data:
+        _bridge_heartbeat_interval = int(data["interval"])
     from ws import emit_status
     emit_status(True)
     return jsonify({"ok": True}), 200
-
 
 @api.route("/api/commands/pending", methods=["GET"])
 def pending_commands():
@@ -82,7 +90,13 @@ def ack(command_id):
     ack_command(command_id)
     return jsonify({"ok": True}), 200
 
-
+@api.route("/api/bridge_online", methods=["GET"])
+def bridge_online():
+    if _last_bridge_seen == 0:
+        return jsonify({"online": False}), 200
+    grace = _bridge_heartbeat_interval + 10
+    online = (time.time() - _last_bridge_seen) < grace
+    return jsonify({"online": online}), 200
 # ─────────────────────────────────────────
 # DASHBOARD ENDPOINTS
 # ─────────────────────────────────────────
