@@ -2,6 +2,3 @@
 "*.db" 
 "__pycache__/" 
 "venv/" 
-"venv/" 
-"ecoadapt/" 
-"__pycache__/" 
