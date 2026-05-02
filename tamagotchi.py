@@ -25,6 +25,11 @@ Life stages (0-4):
 from datetime import datetime, timedelta
 from db import get_plant, save_plant, get_latest, get_history, get_db
 from species import get_species
+from datetime import datetime
+
+def _is_daytime():
+    hour = datetime.now().hour
+    return 7 <= hour <= 21
 
 # ─────────────────────────────────────────────────────────
 # CONSTANTS
@@ -59,10 +64,6 @@ HAPPINESS_CRITICAL_PENALTY       = 10.0
 # ─────────────────────────────────────────────────────────
 
 def calculate_needs(reading, species_name):
-    """
-    Returns dict with thirst, energy, comfort each 0-100.
-    100 = need fully met. 0 = need critically unmet.
-    """
     config = get_species(species_name)
     t = config["thresholds"]
 
@@ -70,18 +71,21 @@ def calculate_needs(reading, species_name):
     temperature = reading.get("temperature", 20)
     light       = reading.get("light", 1000)
 
-    # Thirst — inverse of moisture normalised to species range
+    # Thirst
     moisture_range = t["moisture_high"] - t["moisture_low"]
     thirst = ((moisture - t["moisture_low"]) / moisture_range) * 100
     thirst = max(0, min(100, thirst))
 
-    # Energy — how close light is to species ideal midpoint
-    light_mid   = (t["light_low"] + t["light_high"]) / 2
-    light_range = (t["light_high"] - t["light_low"]) / 2
-    energy = max(0, 100 - abs(light - light_mid) / light_range * 100)
-    energy = max(0, min(100, energy))
+    # Energy — always 100 at night, plants rest
+    if _is_daytime():
+        light_mid   = (t["light_low"] + t["light_high"]) / 2
+        light_range = (t["light_high"] - t["light_low"]) / 2
+        energy = max(0, 100 - abs(light - light_mid) / light_range * 100)
+        energy = max(0, min(100, energy))
+    else:
+        energy = 100
 
-    # Comfort — how close temp is to species ideal midpoint
+    # Comfort
     temp_mid   = (t["temp_low"] + t["temp_high"]) / 2
     temp_range = (t["temp_high"] - t["temp_low"]) / 2
     comfort = max(0, 100 - abs(temperature - temp_mid) / temp_range * 100)
@@ -92,7 +96,7 @@ def calculate_needs(reading, species_name):
         "energy":  round(energy, 1),
         "comfort": round(comfort, 1),
     }
-
+    
 def calculate_happiness(needs):
     """
     Weighted composite of needs.

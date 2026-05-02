@@ -1,6 +1,10 @@
 from species import get_species
 from db import get_latest, get_utterances
 from datetime import datetime, timedelta
+from datetime import datetime
+def _is_daytime():
+    hour = datetime.now().hour
+    return 7 <= hour <= 21
 
 # Minimum minutes between same alert type to avoid spamming
 DEBOUNCE_MINUTES = 30
@@ -77,20 +81,20 @@ def check_reading(reading, species_name):
             "message": f"Temperature is high at {temperature:.1f}°C",
             "mood": "hot"
         })
+    if _is_daytime():
+        if light < t["light_low"] and _should_speak("light_low"):
+            triggers.append({
+                "type": "light_low",
+                "message": f"Light is low at {light:.0f} lux",
+                "mood": "dim"
+            })
 
-    if light < t["light_low"] and _should_speak("light_low"):
-        triggers.append({
-            "type": "light_low",
-            "message": f"Light is low at {light:.0f} lux",
-            "mood": "dim"
-        })
-
-    elif light > t["light_high"] and _should_speak("light_high"):
-        triggers.append({
-            "type": "light_high",
-            "message": f"Light is very high at {light:.0f} lux",
-            "mood": "bright"
-        })
+        elif light > t["light_high"] and _should_speak("light_high"):
+            triggers.append({
+                "type": "light_high",
+                "message": f"Light is very high at {light:.0f} lux",
+                "mood": "bright"
+            })
 
     if battery < 20 and _should_speak("battery_low"):
         triggers.append({
