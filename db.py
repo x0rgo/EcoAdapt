@@ -1,7 +1,6 @@
 import sqlite3
 from datetime import datetime
 import os
-
 DB_PATH = os.environ.get("DB_PATH", "ecoadapt.db")
 
 def get_db():
@@ -76,6 +75,11 @@ def init_db():
         c.execute("INSERT INTO plant_config (id) VALUES (1)")
 
     conn.commit()
+    try:
+        from achievements import init_achievements_db
+        init_achievements_db()
+    except:
+        pass
     conn.close()
     print("DB initialised")
 

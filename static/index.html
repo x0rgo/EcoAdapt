@@ -8,6 +8,167 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+/* Achievement toast */
+.ach-toast {
+  position: fixed;
+  bottom: 80px;
+  right: -400px;
+  width: 320px;
+  background: var(--s1);
+  border: 1px solid var(--amber2);
+  border-left: 4px solid var(--amber);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 1000;
+  transition: right 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.ach-toast.show { right: 24px; }
+
+.ach-toast-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+  animation: achPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ach-toast-body { flex: 1; }
+
+.ach-toast-label {
+  font-size: 9px;
+  color: var(--amber);
+  font-family: 'DM Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 3px;
+}
+
+.ach-toast-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.ach-toast-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.ach-toast-xp {
+  font-size: 11px;
+  color: var(--green);
+  font-family: 'DM Mono', monospace;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+@keyframes achPop {
+  0%   { transform: scale(0.5); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Achievement panel */
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.ach-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.2s;
+}
+
+.ach-card.unlocked {
+  border-color: var(--amber2);
+  background: linear-gradient(135deg, var(--s1), #2a1f0a);
+}
+
+.ach-card-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  filter: grayscale(1);
+  opacity: 0.3;
+  transition: all 0.3s;
+}
+
+.ach-card.unlocked .ach-card-icon {
+  filter: none;
+  opacity: 1;
+}
+
+.ach-card-body { flex: 1; }
+
+.ach-card-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.ach-card.unlocked .ach-card-name { color: var(--amber); }
+
+.ach-card-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.ach-card-xp {
+  font-size: 10px;
+  color: var(--green);
+  font-family: 'DM Mono', monospace;
+  flex-shrink: 0;
+}
+
+.ach-card-date {
+  font-size: 9px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  margin-top: 3px;
+}
+
+.ach-category-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin: 20px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ach-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+
+.ach-progress-label { font-size: 12px; color: var(--muted); flex: 1; }
+.ach-progress-count { font-family: 'DM Mono', monospace; font-size: 18px; color: var(--amber); }
+.ach-progress-total { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
 :root {
   --bg:       #0c0f0a;
   --s1:       #131710;
@@ -802,10 +963,20 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
 </header>
 
 <nav>
+  <div class="ach-toast" id="achToast">
+    <div class="ach-toast-icon" id="achToastIcon">🏆</div>
+    <div class="ach-toast-body">
+      <div class="ach-toast-label">Achievement Unlocked</div>
+      <div class="ach-toast-name" id="achToastName">—</div>
+      <div class="ach-toast-desc" id="achToastDesc">—</div>
+    </div>
+    <div class="ach-toast-xp" id="achToastXp">+0 XP</div>
+  </div>
   <button class="nav-tab" onclick="switchTab('pet')">Pet</button>
   <button class="nav-tab active" onclick="switchTab('live')">Live</button>
   <button class="nav-tab" onclick="switchTab('history')">History</button>
   <button class="nav-tab" onclick="switchTab('settings')">Settings</button>
+  <button class="nav-tab" onclick="switchTab('achievements')">Achievements</button>
 </nav>
 
 <main>
@@ -1160,6 +1331,20 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
 
   </div>
 
+    <!-- ═══ ACHIEVEMENTS TAB ═══ -->
+  <div class="tab-panel" id="tab-achievements">
+
+    <div class="ach-progress">
+      <div class="ach-progress-label">Achievements unlocked</div>
+      <div>
+        <span class="ach-progress-count" id="achUnlockedCount">0</span>
+        <span class="ach-progress-total" id="achTotalCount">/ 30</span>
+      </div>
+    </div>
+
+    <div id="achCategories"></div>
+
+  </div>
 </main>
 
 <div class="toast" id="toast"></div>
@@ -1613,6 +1798,7 @@ function switchTab(name) {
   event.target.classList.add("active");
   if (name === "history") loadHistory(24, document.querySelector(".range-btn"));
   if (name === "pet") loadTamagotchi();
+  if (name === "achievements") loadAchievements();
 }
 
 // ═══════════════════════════════════
@@ -1701,6 +1887,135 @@ function updateTamagotchi(data) {
 }
 
 // ═══════════════════════════════════
+// ACHIEVEMENTS
+// ═══════════════════════════════════
+
+const CATEGORY_LABELS = {
+  care:        "🌱 Care",
+  interaction: "💬 Interaction",
+  growth:      "⭐ Growth",
+  neglect:     "😰 Neglect & Recovery",
+  extreme:     "🔥 Extreme",
+  birthday:    "🎂 Milestones",
+};
+
+let achSoundCtx = null;
+
+function playAchievementSound() {
+  try {
+    if (!achSoundCtx) achSoundCtx = new AudioContext();
+    const ctx = achSoundCtx;
+
+    // Minecraft-style ascending arpeggio
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 E5 G5 C6
+    notes.forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = "sine";
+      osc.frequency.value = freq;
+
+      const start = ctx.currentTime + i * 0.1;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.3, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+
+      osc.start(start);
+      osc.stop(start + 0.4);
+    });
+  } catch(e) {
+    console.log("Achievement sound failed:", e);
+  }
+}
+
+let achToastQueue = [];
+let achToastShowing = false;
+
+function showAchievementToast(ach) {
+  achToastQueue.push(ach);
+  if (!achToastShowing) processAchievementQueue();
+}
+
+function processAchievementQueue() {
+  if (!achToastQueue.length) { achToastShowing = false; return; }
+  achToastShowing = true;
+  const ach = achToastQueue.shift();
+
+  document.getElementById("achToastIcon").textContent = ach.emoji;
+  document.getElementById("achToastName").textContent = ach.name;
+  document.getElementById("achToastDesc").textContent = ach.desc;
+  document.getElementById("achToastXp").textContent   = `+${ach.xp} XP`;
+
+  const toast = document.getElementById("achToast");
+  toast.classList.add("show");
+  playAchievementSound();
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(processAchievementQueue, 400);
+  }, 4000);
+}
+
+async function loadAchievements() {
+  const res  = await fetch("/api/achievements");
+  const data = await res.json();
+
+  const unlocked = data.filter(a => a.unlocked).length;
+  document.getElementById("achUnlockedCount").textContent = unlocked;
+  document.getElementById("achTotalCount").textContent    = `/ ${data.length}`;
+
+  // Group by category
+  const grouped = {};
+  data.forEach(a => {
+    if (!grouped[a.category]) grouped[a.category] = [];
+    grouped[a.category].push(a);
+  });
+
+  const container = document.getElementById("achCategories");
+  container.innerHTML = "";
+
+  Object.keys(CATEGORY_LABELS).forEach(cat => {
+    if (!grouped[cat]) return;
+
+    const title = document.createElement("div");
+    title.className = "ach-category-title";
+    title.textContent = CATEGORY_LABELS[cat];
+    container.appendChild(title);
+
+    const grid = document.createElement("div");
+    grid.className = "ach-grid";
+
+    grouped[cat].forEach(ach => {
+      const card = document.createElement("div");
+      card.className = `ach-card ${ach.unlocked ? "unlocked" : ""}`;
+      card.innerHTML = `
+        <div class="ach-card-icon">${ach.emoji}</div>
+        <div class="ach-card-body">
+          <div class="ach-card-name">${ach.name}</div>
+          <div class="ach-card-desc">${ach.unlocked ? ach.desc : "???"}</div>
+          ${ach.unlocked && ach.unlocked_at ? `<div class="ach-card-date">${new Date(ach.unlocked_at).toLocaleDateString()}</div>` : ""}
+        </div>
+        ${ach.xp > 0 ? `<div class="ach-card-xp">+${ach.xp} XP</div>` : ""}
+      `;
+      grid.appendChild(card);
+    });
+
+    container.appendChild(grid);
+  });
+}
+
+// WebSocket achievement listener
+socket.on("achievement", (ach) => {
+  showAchievementToast(ach);
+  // Refresh achievements panel if open
+  if (document.getElementById("tab-achievements").classList.contains("active")) {
+    loadAchievements();
+  }
+});
+
+// ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
 async function init() {
@@ -1733,10 +2048,21 @@ async function init() {
 
   // Load chat history
   const chatRes  = await fetch("/api/history?hours=24");
+  // Load Achievements
+  await loadAchievements();
 
 }
 
 init();
 </script>
 </body>
+  <div class="ach-toast" id="achToast">
+    <div class="ach-toast-icon" id="achToastIcon">🏆</div>
+    <div class="ach-toast-body">
+      <div class="ach-toast-label">Achievement Unlocked</div>
+      <div class="ach-toast-name" id="achToastName">—</div>
+      <div class="ach-toast-desc" id="achToastDesc">—</div>
+    </div>
+    <div class="ach-toast-xp" id="achToastXp">+0 XP</div>
+  </div>
 </html>

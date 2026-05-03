@@ -18,7 +18,11 @@ api = Blueprint("api", __name__)
 # ─────────────────────────────────────────
 # BRIDGE ENDPOINTS
 # ─────────────────────────────────────────
-
+@api.route("/api/achievements", methods=["GET"])
+def achievements():
+    from achievements import get_all_achievements
+    return jsonify(get_all_achievements()), 200
+    
 @api.route("/api/reading", methods=["POST"])
 @api.route("/api/reading", methods=["POST"])
 def receive_reading():
@@ -34,11 +38,21 @@ def receive_reading():
     # Store in DB
     store_reading(moisture, temperature, light, battery)
 
-    # Update tamagotchi state ← ADD THIS
+    # Update tamagotchi state 
     from tamagotchi import update_tamagotchi
     reading = {"moisture": moisture, "temperature": temperature,
                "light": light, "battery": battery}
     tama_state = update_tamagotchi(reading)
+    # Achievements
+    from achievements import check_sensor_achievements
+    history = get_history(hours=1)
+    prev = history[-2] if len(history) >= 2 else None
+    new_achievements = check_sensor_achievements(reading, prev)
+    if new_achievements:
+        from ws import socketio
+        for ach_id in new_achievements:
+            from achievements import get_achievement_details
+            socketio.emit("achievement", get_achievement_details(ach_id))
 
     # Check thresholds
     plant = get_plant()
@@ -136,6 +150,12 @@ def update_plant_config():
         return jsonify({"error": "no data"}), 400
     save_plant(data)
 
+    from achievements import check_interaction_achievements
+    if "name" in data and data["name"]:
+        check_interaction_achievements("name_given")
+    if "species" in data:
+        check_interaction_achievements("species_changed", {"species": data["species"]})
+
     # If mode changed, queue command to pod
     if "mode" in data:
         queue_command("SET_MODE", f'{{"mode": "{data["mode"]}"}}'  )
@@ -179,7 +199,8 @@ def chat():
         print("CHAT ERROR:", traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-    
+    from achievements import check_interaction_achievements
+    new_ach = check_interaction_achievements("chat", {"message": data["message"]})
 
     return jsonify({"response": response}), 200
 

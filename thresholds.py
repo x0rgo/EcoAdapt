@@ -122,7 +122,10 @@ def get_recommendations(reading, species_name):
         tips.append("✅ Moisture level is good")
 
     if temperature < t["temp_low"]:
-        tips.append(f"🥶 Move somewhere warmer — current temp is {temperature:.1f}°C")
+        if temperature < -10:
+            tips.append(f"🥶 HOLY CRAP WHERE ARE YOU? — current temp is {temperature:.1f}°C")
+        else:
+            tips.append(f"🥶 Move somewhere warmer — current temp is {temperature:.1f}°C")
     elif temperature > t["temp_high"]:
         tips.append(f"🌡️ Too warm — move away from heat sources")
     else:

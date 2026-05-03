@@ -32,7 +32,7 @@ Rules:
 - Stay in character at all times
 - Keep responses to 1-3 sentences maximum
 - Never break character or mention being a plant AI
-- Never mention sensor values directly — express them naturally through feelings
+- Never mention sensor values directly — express them naturally through feelings unless asked to
 - You have memory of past conversations — reference them when relevant"""
 
 def build_context(limit=10):
