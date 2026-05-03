@@ -3,84 +3,82 @@ from db import (
     store_reading, get_latest, get_history,
     get_plant, save_plant, get_utterances,
     queue_command, get_pending_commands, ack_command,
-    store_utterance
+    store_utterance, store_chat, get_chat_history
 )
 from species import list_species
 from thresholds import check_reading, get_mood, get_recommendations
 from personality import generate_speech, respond_to_user
+from auth import login_required, get_current_user, api_key_or_login_required
 import time
-
-_last_bridge_seen = 0
-_bridge_heartbeat_interval = 60  # default assumption
 
 api = Blueprint("api", __name__)
 
-# ─────────────────────────────────────────
+_last_bridge_seen = 0
+_bridge_heartbeat_interval = 60
+
+# ─────────────────────────────────────────────────────────
 # BRIDGE ENDPOINTS
-# ─────────────────────────────────────────
-@api.route("/api/achievements", methods=["GET"])
-def achievements():
-    from achievements import get_all_achievements
-    return jsonify(get_all_achievements()), 200
-    
+# ─────────────────────────────────────────────────────────
+
 @api.route("/api/reading", methods=["POST"])
-@api.route("/api/reading", methods=["POST"])
+@api_key_or_login_required
 def receive_reading():
     data = request.get_json()
     if not data:
         return jsonify({"error": "no data"}), 400
+
+    user = request.api_user
+    user_id = user["id"]
 
     moisture    = data.get("moisture", 0)
     temperature = data.get("temperature", 0)
     light       = data.get("light", 0)
     battery     = data.get("battery", 100)
 
-    # Store in DB
-    store_reading(moisture, temperature, light, battery)
+    store_reading(moisture, temperature, light, battery, user_id)
 
-    # Update tamagotchi state 
-    from tamagotchi import update_tamagotchi
     reading = {"moisture": moisture, "temperature": temperature,
                "light": light, "battery": battery}
-    tama_state = update_tamagotchi(reading)
-    # Achievements
-    from achievements import check_sensor_achievements
-    history = get_history(hours=1)
-    prev = history[-2] if len(history) >= 2 else None
-    new_achievements = check_sensor_achievements(reading, prev)
-    if new_achievements:
-        from ws import socketio
-        for ach_id in new_achievements:
-            from achievements import get_achievement_details
-            socketio.emit("achievement", get_achievement_details(ach_id))
+
+    # Update tamagotchi
+    from tamagotchi import update_tamagotchi
+    tama_state = update_tamagotchi(reading, user_id)
 
     # Check thresholds
-    plant = get_plant()
+    plant   = get_plant(user_id)
     species = plant.get("species", "pothos")
     triggers = check_reading(reading, species)
 
     speech = None
     if triggers:
-        t = triggers[0]
+        t    = triggers[0]
         mood = get_mood(reading, species)
         try:
-            speech = generate_speech(t["type"], mood, reading)
+            speech = generate_speech(t["type"], mood, reading, user_id)
         except Exception as e:
             print(f"Speech generation error: {e}")
 
-    # Emit via WebSocket
+    # Check achievements
+    try:
+        from achievements import check_sensor_achievements
+        history = get_history(hours=1, user_id=user_id)
+        prev    = history[-2] if len(history) >= 2 else None
+        new_ach = check_sensor_achievements(reading, prev, user_id)
+        if new_ach:
+            from ws import socketio
+            from achievements import get_achievement_details
+            for ach_id in new_ach:
+                socketio.emit("achievement", get_achievement_details(ach_id))
+    except Exception as e:
+        print(f"Achievement check error: {e}")
+
     from ws import emit_reading, emit_speech
     emit_reading(reading)
-    socketio.emit("tamagotchi", tama_state)
     if speech:
         emit_speech(speech, get_mood(reading, species))
 
     return jsonify({"ok": True, "speech": speech, "tamagotchi": tama_state}), 200
 
-@api.route("/api/tamagotchi", methods=["GET"])
-def tamagotchi_state():
-    from tamagotchi import get_state
-    return jsonify(get_state()), 200
 
 @api.route("/api/status", methods=["POST"])
 def bridge_status():
@@ -93,76 +91,92 @@ def bridge_status():
     emit_status(True)
     return jsonify({"ok": True}), 200
 
-@api.route("/api/commands/pending", methods=["GET"])
-def pending_commands():
-    commands = get_pending_commands()
-    return jsonify(commands), 200
-
-
-@api.route("/api/commands/<int:command_id>/ack", methods=["POST"])
-def ack(command_id):
-    ack_command(command_id)
-    return jsonify({"ok": True}), 200
 
 @api.route("/api/bridge_online", methods=["GET"])
 def bridge_online():
     if _last_bridge_seen == 0:
         return jsonify({"online": False}), 200
-    grace = _bridge_heartbeat_interval + 10
+    grace  = _bridge_heartbeat_interval + 10
     online = (time.time() - _last_bridge_seen) < grace
     return jsonify({"online": online}), 200
-# ─────────────────────────────────────────
+
+
+@api.route("/api/commands/pending", methods=["GET"])
+@api_key_or_login_required
+def pending_commands():
+    user     = request.api_user
+    commands = get_pending_commands(user["id"])
+    return jsonify(commands), 200
+
+
+@api.route("/api/commands/<int:command_id>/ack", methods=["POST"])
+@api_key_or_login_required
+def ack(command_id):
+    ack_command(command_id)
+    return jsonify({"ok": True}), 200
+
+
+# ─────────────────────────────────────────────────────────
 # DASHBOARD ENDPOINTS
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 
 @api.route("/api/readings", methods=["GET"])
+@login_required
 def latest_reading():
-    reading = get_latest()
+    user    = get_current_user()
+    reading = get_latest(user["id"])
     if not reading:
-        # Return mock data if no real readings yet
         reading = {
-            "moisture": 55,
-            "temperature": 21.0,
-            "light": 3200,
-            "battery": 100,
+            "moisture": 55, "temperature": 21.0,
+            "light": 3200, "battery": 100,
             "timestamp": "no data yet"
         }
     return jsonify(reading), 200
 
 
 @api.route("/api/history", methods=["GET"])
+@login_required
 def history():
+    user  = get_current_user()
     hours = request.args.get("hours", 24, type=int)
-    data = get_history(hours=hours)
+    data  = get_history(hours=hours, user_id=user["id"])
     return jsonify(data), 200
 
 
 @api.route("/api/plant", methods=["GET"])
+@login_required
 def get_plant_config():
-    plant = get_plant()
+    user  = get_current_user()
+    plant = get_plant(user["id"])
     return jsonify(plant), 200
 
 
 @api.route("/api/plant", methods=["POST"])
+@login_required
 def update_plant_config():
+    user = get_current_user()
     data = request.get_json()
     if not data:
         return jsonify({"error": "no data"}), 400
-    save_plant(data)
+
+    save_plant(data, user["id"])
 
     from achievements import check_interaction_achievements
     if "name" in data and data["name"]:
-        check_interaction_achievements("name_given")
+        check_interaction_achievements("name_given", user_id=user["id"])
     if "species" in data:
-        check_interaction_achievements("species_changed", {"species": data["species"]})
+        check_interaction_achievements("species_changed",
+                                       {"species": data["species"]},
+                                       user_id=user["id"])
 
-    # If mode changed, queue command to pod
     if "mode" in data:
-        queue_command("SET_MODE", f'{{"mode": "{data["mode"]}"}}'  )
+        queue_command("SET_MODE", f'{{"mode": "{data["mode"]}"}}', user["id"])
     if "read_interval" in data:
-        queue_command("SET_READ_INTERVAL", f'{{"value": {data["read_interval"]}}}')
+        queue_command("SET_READ_INTERVAL",
+                      f'{{"value": {data["read_interval"]}}}', user["id"])
     if "check_interval" in data:
-        queue_command("SET_CHECK_INTERVAL", f'{{"value": {data["check_interval"]}}}')
+        queue_command("SET_CHECK_INTERVAL",
+                      f'{{"value": {data["check_interval"]}}}', user["id"])
 
     return jsonify({"ok": True}), 200
 
@@ -173,70 +187,149 @@ def species_list():
 
 
 @api.route("/api/command", methods=["POST"])
+@login_required
 def send_command():
+    user = get_current_user()
     data = request.get_json()
     if not data or "command" not in data:
         return jsonify({"error": "missing command"}), 400
-    queue_command(data["command"], data.get("payload"))
+    queue_command(data["command"], data.get("payload"), user["id"])
     return jsonify({"ok": True}), 200
 
 
 @api.route("/api/chat", methods=["POST"])
+@login_required
 def chat():
+    user = get_current_user()
     data = request.get_json()
     if not data or "message" not in data:
         return jsonify({"error": "missing message"}), 400
 
-    reading = get_latest() or {
+    reading = get_latest(user["id"]) or {
         "moisture": 55, "temperature": 21.0,
         "light": 3200, "battery": 100
     }
 
     try:
-        response = respond_to_user(data["message"], reading)
+        response = respond_to_user(data["message"], reading, user["id"])
     except Exception as e:
         import traceback
         print("CHAT ERROR:", traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-    from achievements import check_interaction_achievements
-    new_ach = check_interaction_achievements("chat", {"message": data["message"]})
+    try:
+        from achievements import check_interaction_achievements
+        check_interaction_achievements("chat",
+                                       {"message": data["message"]},
+                                       user_id=user["id"])
+    except Exception as e:
+        print(f"Achievement check error: {e}")
 
     return jsonify({"response": response}), 200
 
 
 @api.route("/api/utterances", methods=["GET"])
+@login_required
 def utterances():
+    user  = get_current_user()
     limit = request.args.get("limit", 10, type=int)
-    return jsonify(get_utterances(limit=limit)), 200
+    return jsonify(get_utterances(limit=limit, user_id=user["id"])), 200
 
 
 @api.route("/api/recommendations", methods=["GET"])
+@login_required
 def recommendations():
-    reading = get_latest() or {
+    user    = get_current_user()
+    reading = get_latest(user["id"]) or {
         "moisture": 55, "temperature": 21.0,
         "light": 3200, "battery": 100
     }
-    plant = get_plant()
-    tips = get_recommendations(reading, plant.get("species", "pothos"))
+    plant = get_plant(user["id"])
+    tips  = get_recommendations(reading, plant.get("species", "pothos"))
     return jsonify(tips), 200
 
 
 @api.route("/api/checkin", methods=["POST"])
+@login_required
 def manual_checkin():
-    reading = get_latest() or {
+    import traceback
+    user = get_current_user()
+    try:
+        reading = get_latest(user["id"]) or {
+            "moisture": 55, "temperature": 21.0,
+            "light": 3200, "battery": 100
+        }
+        plant = get_plant(user["id"])
+        mood  = get_mood(reading, plant.get("species", "pothos"))
+        speech = generate_speech("checkin", mood, reading, user["id"])
+        from ws import emit_speech
+        emit_speech(speech, mood)
+        return jsonify({"speech": speech}), 200
+    except Exception as e:
+        print("CHECKIN ERROR:", traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+
+@api.route("/api/tamagotchi", methods=["GET"])
+@login_required
+def tamagotchi_state():
+    user = get_current_user()
+    from tamagotchi import get_state
+    return jsonify(get_state(user["id"])), 200
+
+
+@api.route("/api/achievements", methods=["GET"])
+@login_required
+def achievements():
+    user = get_current_user()
+    from achievements import get_all_achievements
+    return jsonify(get_all_achievements(user["id"])), 200
+
+
+@api.route("/api/speak", methods=["POST"])
+@login_required
+def speak():
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "missing text"}), 400
+
+    from tts import generate_audio
+    user    = get_current_user()
+    plant   = get_plant(user["id"])
+    species = plant.get("species", "default")
+
+    audio_b64 = generate_audio(data["text"], species)
+
+    if audio_b64:
+        return jsonify({"audio": audio_b64, "format": "mp3"}), 200
+    else:
+        return jsonify({"audio": None, "fallback": True}), 200
+
+
+# ─────────────────────────────────────────────────────────
+# PUBLIC READ-ONLY VIEW
+# ─────────────────────────────────────────────────────────
+
+@api.route("/api/public/<username>", methods=["GET"])
+def public_plant(username):
+    from auth import get_user_by_username
+    user = get_user_by_username(username)
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+
+    reading = get_latest(user["id"]) or {
         "moisture": 55, "temperature": 21.0,
         "light": 3200, "battery": 100
     }
-    plant = get_plant()
-    from thresholds import get_mood
-    mood = get_mood(reading, plant.get("species", "pothos"))
-    try:
-        speech = generate_speech("checkin", mood, reading)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    plant      = get_plant(user["id"])
+    utterances = get_utterances(limit=1, user_id=user["id"])
 
-    from ws import emit_speech
-    emit_speech(speech, mood)
+    from tamagotchi import get_state
+    tama = get_state(user["id"])
 
-    return jsonify({"speech": speech}), 200
+    return jsonify({
+        "plant":      plant,
+        "reading":    reading,
+        "last_words": utterances[0] if utterances else None,
+        "tamagotchi": tama,
+    }), 200

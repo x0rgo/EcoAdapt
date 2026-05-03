@@ -172,52 +172,37 @@ def detect_watering(current_reading, previous_reading, species_name):
 # MAIN UPDATE — called on every new reading
 # ─────────────────────────────────────────────────────────
 
-def update_tamagotchi(reading):
-    """
-    Called whenever a new sensor reading arrives.
-    Updates happiness, XP, stage in the database.
-    Returns full tamagotchi state dict.
-    """
-    plant        = get_plant()
+def update_tamagotchi(reading, user_id=1):
+    plant        = get_plant(user_id)
     species_name = plant.get("species", "pothos")
 
-    # Current state from DB
     happiness = float(plant.get("happiness", 100))
     xp        = float(plant.get("xp", 0))
 
-    # Calculate needs
     needs = calculate_needs(reading, species_name)
-
-    # Calculate new happiness
     new_happiness = calculate_happiness(needs)
-
-    # Smooth transition — don't jump instantly
     happiness = happiness * 0.7 + new_happiness * 0.3
     happiness = max(0, min(100, happiness))
 
-    # Check for watering action
-    history   = get_history(hours=1)
+    history   = get_history(hours=1, user_id=user_id)
     prev      = history[-2] if len(history) >= 2 else None
     xp_gained, timely = detect_watering(reading, prev, species_name)
 
     if xp_gained:
         xp += xp_gained
-        _store_care_action("watered", xp_gained, timely)
+        _store_care_action("watered", xp_gained, timely, user_id)
 
-    # Award passive XP for good readings
     if needs["thirst"]  > 60: xp += 0.5
     if needs["energy"]  > 60: xp += 0.3
     if needs["comfort"] > 60: xp += 0.2
 
-    # Get stage
     stage = get_stage(xp)
 
-    # Save back to DB
     save_plant({
         "happiness": round(happiness, 1),
         "xp":        round(xp, 1),
         "stage":     stage["id"],
-    })
+    }, user_id)
 
     return build_state(reading, needs, happiness, xp, stage, species_name)
 
@@ -233,12 +218,10 @@ def award_xp(amount, reason="interaction"):
 # STATE BUILDER
 # ─────────────────────────────────────────────────────────
 
-def build_state(reading=None, needs=None, happiness=None, xp=None, stage=None, species_name=None):
-    """Build full tamagotchi state for API response."""
-    plant = get_plant()
-
+def build_state(reading=None, needs=None, happiness=None, xp=None, stage=None, species_name=None, user_id=1):
+    plant = get_plant(user_id)
     if reading is None:
-        reading = get_latest() or {"moisture": 50, "temperature": 20, "light": 1000, "battery": 100}
+        reading = get_latest(user_id=user_id) or {"moisture": 50, "temperature": 20, "light": 5000, "battery": 100}
 
     species_name = species_name or plant.get("species", "pothos")
 
@@ -268,19 +251,19 @@ def build_state(reading=None, needs=None, happiness=None, xp=None, stage=None, s
         "stages":     STAGES,
     }
 
-def get_state():
-    """Get current tamagotchi state without updating."""
-    return build_state()
+def get_state(user_id=1):
+    return build_state(user_id=user_id)
+
 
 # ─────────────────────────────────────────────────────────
 # CARE ACTION LOG
 # ─────────────────────────────────────────────────────────
 
-def _store_care_action(action, xp, timely):
+def _store_care_action(action, xp, timely, user_id=1):
     conn = get_db()
     conn.execute(
-        "INSERT INTO care_log (action, xp_awarded, timely) VALUES (?,?,?)",
-        (action, xp, 1 if timely else 0)
+        "INSERT INTO care_log (action, xp_awarded, timely, user_id) VALUES (?,?,?,?)",
+        (action, xp, 1 if timely else 0, user_id)
     )
     conn.commit()
     conn.close()

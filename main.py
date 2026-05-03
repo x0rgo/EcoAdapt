@@ -8,16 +8,19 @@ from ws import socketio
 from dotenv import load_dotenv
 load_dotenv()
 
+from auth import auth as auth_blueprint, login_required
+
 def create_app():
     app = Flask(__name__, static_folder="static", static_url_path="")
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "ecoadapt-dev-key")
 
     CORS(app)
     socketio.init_app(app)
+    app.register_blueprint(auth_blueprint)
     app.register_blueprint(api)
 
-    # Serve dashboard at root
     @app.route("/")
+    @login_required
     def index():
         return app.send_static_file("index.html")
 

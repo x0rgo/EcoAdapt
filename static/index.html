@@ -1219,6 +1219,17 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
           </button>
         </div>
       </div>
+      <div class="form-group" style="margin-top:16px">
+        <label class="form-label">Your API Key</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="form-input" id="apiKeyDisplay" type="password" readonly>
+          <button class="btn" onclick="toggleApiKey()">👁</button>
+          <button class="btn" onclick="regenApiKey()">↻</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
+          Flash this into your bridge firmware
+        </div>
+      </div>
 
       <!-- About -->
       <div class="settings-card">
@@ -1747,6 +1758,25 @@ async function savePodSettings() {
 
   showToast("Pod settings saved ✓");
 }
+//API KEY
+async function loadApiKey() {
+    const res  = await fetch("/api/me");
+    const data = await res.json();
+    document.getElementById("apiKeyDisplay").value = data.api_key;
+}
+
+function toggleApiKey() {
+    const input = document.getElementById("apiKeyDisplay");
+    input.type = input.type === "password" ? "text" : "password";
+}
+
+async function regenApiKey() {
+    if (!confirm("Regenerate API key? Your bridge will stop working until reflashed.")) return;
+    const res  = await fetch("/api/regenerate-key", { method: "POST" });
+    const data = await res.json();
+    document.getElementById("apiKeyDisplay").value = data.api_key;
+    showToast("API key regenerated ✓");
+}
 
 // ═══════════════════════════════════
 // MODE
@@ -2019,6 +2049,7 @@ socket.on("achievement", (ach) => {
 // INIT
 // ═══════════════════════════════════
 async function init() {
+  await loadApiKey()
   await loadSpecies();
   await loadPlantConfig();
   await loadRecommendations();
