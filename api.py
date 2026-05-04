@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from db import (
     store_reading, get_latest, get_history,
     get_plant, save_plant, get_utterances,
@@ -10,11 +10,21 @@ from thresholds import check_reading, get_mood, get_recommendations
 from personality import generate_speech, respond_to_user
 from auth import login_required, get_current_user, api_key_or_login_required
 import time
+import uuid
 
 api = Blueprint("api", __name__)
 
 _last_bridge_seen = 0
 _bridge_heartbeat_interval = 60
+
+# In-memory registry for audio stream tokens (single-user hobby scale)
+_stream_registry = {}
+
+def _cleanup_streams():
+    now = time.time()
+    expired = [sid for sid, cfg in _stream_registry.items() if now - cfg.get("created", 0) > 300]
+    for sid in expired:
+        _stream_registry.pop(sid, None)
 
 # ─────────────────────────────────────────────────────────
 # BRIDGE ENDPOINTS
@@ -75,7 +85,7 @@ def receive_reading():
     from ws import emit_reading, emit_speech
     emit_reading(reading)
     if speech:
-        emit_speech(speech, get_mood(reading, species))
+        emit_speech(speech, get_mood(reading, species), species)
 
     return jsonify({"ok": True, "speech": speech, "tamagotchi": tama_state}), 200
 
@@ -295,14 +305,93 @@ def speak():
     from tts import generate_audio
     user    = get_current_user()
     plant   = get_plant(user["id"])
-    species = plant.get("species", "default")
+    species = data.get("species", plant.get("species", "default"))
+    model   = data.get("model", plant.get("tts_model"))
+    speed   = data.get("speed", plant.get("speech_speed", 1.0))
+    fmt     = data.get("format", plant.get("speech_format", "mp3"))
 
-    audio_b64 = generate_audio(data["text"], species)
+    audio_b64 = generate_audio(data["text"], species, model, speed, fmt)
 
     if audio_b64:
-        return jsonify({"audio": audio_b64, "format": "mp3"}), 200
+        return jsonify({"audio": audio_b64, "format": fmt}), 200
     else:
         return jsonify({"audio": None, "fallback": True}), 200
+
+
+@api.route("/api/tts-models", methods=["GET"])
+@login_required
+def tts_models():
+    from tts import list_tts_models
+    return jsonify(list_tts_models()), 200
+
+
+@api.route("/api/speak/stream", methods=["POST"])
+@login_required
+def create_speak_stream():
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"error": "missing text"}), 400
+
+    user  = get_current_user()
+    plant = get_plant(user["id"])
+
+    _cleanup_streams()
+
+    stream_id = str(uuid.uuid4())
+    _stream_registry[stream_id] = {
+        "text": data["text"],
+        "species": data.get("species", plant.get("species", "default")),
+        "model": data.get("model", plant.get("tts_model")),
+        "mood": data.get("mood", "neutral"),
+        "speed": data.get("speed", plant.get("speech_speed", 1.0)),
+        "format": data.get("format", plant.get("speech_format", "mp3")),
+        "created": time.time()
+    }
+
+    return jsonify({"stream_url": f"/api/speak/stream/{stream_id}"}), 200
+
+
+@api.route("/api/speak/stream/<stream_id>", methods=["GET"])
+@login_required
+def get_speak_stream(stream_id):
+    config = _stream_registry.pop(stream_id, None)
+    if not config:
+        return jsonify({"error": "stream expired or invalid"}), 404
+
+    from tts import stream_audio
+    model = config.get("model", "")
+    is_gemini = "google" in (model or "").lower()
+
+    def generate():
+        buf = bytearray()
+        try:
+            for chunk in stream_audio(config["text"], config["species"], model,
+                                       config.get("mood", "neutral"),
+                                       config.get("speed", 1.0)):
+                if chunk:
+                    buf.extend(chunk)
+            if is_gemini:
+                import struct
+                pcm = bytes(buf)
+                sample_rate = 24000
+                num_channels = 1
+                bits = 16
+                header = struct.pack('<4sI4s4sIHHIIHH4sI',
+                    b'RIFF', 36 + len(pcm),
+                    b'WAVE', b'fmt ', 16,
+                    1, num_channels, sample_rate,
+                    sample_rate * num_channels * bits // 8,
+                    num_channels * bits // 8, bits,
+                    b'data', len(pcm))
+                yield header + pcm
+            else:
+                if buf:
+                    yield bytes(buf)
+        except Exception as e:
+            print(f"Stream generation error: {e}")
+
+    mimetype = "audio/wav" if is_gemini else "audio/mpeg"
+    return Response(generate(), mimetype=mimetype)
 
 
 # ─────────────────────────────────────────────────────────

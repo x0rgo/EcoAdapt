@@ -44,7 +44,7 @@ def start_scheduler(app):
 
             try:
                 speech = daily_checkin(reading)
-                emit_speech(speech, mood)
+                emit_speech(speech, mood, plant.get("species", "pothos"))
                 print(f"Daily checkin: {speech}")
             except Exception as e:
                 print(f"Checkin error: {e}")

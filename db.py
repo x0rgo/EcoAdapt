@@ -43,6 +43,11 @@ def init_db():
             check_interval  INTEGER DEFAULT 30,
             mode            TEXT DEFAULT 'NORMAL',
             model           TEXT DEFAULT 'mistralai/mistral-nemo',
+            tts_model       TEXT DEFAULT 'openai/gpt-4o-mini-tts-2025-12-15',
+            text_temperature REAL DEFAULT 0.7,
+            text_max_tokens  INTEGER DEFAULT 200,
+            speech_speed     REAL DEFAULT 1.0,
+            speech_format    TEXT DEFAULT 'mp3',
             happiness       REAL DEFAULT 100,
             xp              REAL DEFAULT 0,
             stage           INTEGER DEFAULT 0
@@ -99,6 +104,21 @@ def init_db():
     """)
 
     conn.commit()
+
+    # Migrate: add missing columns
+    for col, typ in [
+        ("tts_model", "TEXT DEFAULT 'openai/gpt-4o-mini-tts-2025-12-15'"),
+        ("text_temperature", "REAL DEFAULT 0.7"),
+        ("text_max_tokens", "INTEGER DEFAULT 200"),
+        ("speech_speed", "REAL DEFAULT 1.0"),
+        ("speech_format", "TEXT DEFAULT 'mp3'"),
+    ]:
+        try:
+            c.execute(f"ALTER TABLE plant_config ADD COLUMN {col} {typ}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
     conn.close()
     print("DB initialised")
 
@@ -160,7 +180,10 @@ def get_plant(user_id=1):
 def save_plant(data, user_id=1):
     conn = get_db()
     fields = ["species", "name", "personality", "read_interval",
-              "check_interval", "mode", "model", "happiness", "xp", "stage"]
+              "check_interval", "mode", "model", "tts_model",
+              "text_temperature", "text_max_tokens",
+              "speech_speed", "speech_format",
+              "happiness", "xp", "stage"]
     for field in fields:
         if field in data:
             conn.execute(

@@ -264,6 +264,8 @@ def generate_speech(trigger, mood, sensor_state, user_id=1):
     plant   = get_plant(user_id)
     species = plant.get("species", "default")
     model   = plant.get("model") or os.environ.get("OPENROUTER_MODEL", "mistralai/mistral-nemo")
+    temp    = float(plant.get("text_temperature", 0.7) or 0.7)
+    max_tok = int(plant.get("text_max_tokens", 200) or 200)
     system  = build_system_prompt(plant, sensor_state, mood, user_id)
     context = build_context(user_id)
 
@@ -271,14 +273,16 @@ def generate_speech(trigger, mood, sensor_state, user_id=1):
     trigger_map = TRIGGER_PROMPTS.get(trigger, {})
     user_message = trigger_map.get(species) or trigger_map.get("default") or "Say something to your owner."
 
-    # Dynamic max tokens based on trigger
-    max_tokens = 200 if trigger in ["checkin", "moisture_low", "battery_low"] else 150
+    # Dynamic max tokens based on trigger, capped by user setting
+    base_max = 200 if trigger in ["checkin", "moisture_low", "battery_low"] else 150
+    max_tokens = min(base_max, max_tok)
 
     messages = context + [{"role": "user", "content": user_message}]
 
     response = client.chat.completions.create(
         model=model,
         max_tokens=max_tokens,
+        temperature=temp,
         messages=[{"role": "system", "content": system}] + messages
     )
 
@@ -297,6 +301,8 @@ def respond_to_user(user_message, sensor_state, user_id=1):
     plant   = get_plant(user_id)
     species = plant.get("species", "default")
     model   = plant.get("model") or os.environ.get("OPENROUTER_MODEL", "mistralai/mistral-nemo")
+    temp    = float(plant.get("text_temperature", 0.7) or 0.7)
+    max_tok = int(plant.get("text_max_tokens", 200) or 200)
 
     from thresholds import get_mood
     mood   = get_mood(sensor_state, species)
@@ -307,13 +313,15 @@ def respond_to_user(user_message, sensor_state, user_id=1):
 
     messages = context + [{"role": "user", "content": user_message}]
 
-    # Longer responses for conversational messages
+    # Longer responses for conversational messages, capped by user setting
     msg_length  = len(user_message)
-    max_tokens  = 300 if msg_length > 100 else 200
+    base_max    = 300 if msg_length > 100 else 200
+    max_tokens  = min(base_max, max_tok)
 
     response = client.chat.completions.create(
         model=model,
         max_tokens=max_tokens,
+        temperature=temp,
         messages=[{"role": "system", "content": system}] + messages
     )
 

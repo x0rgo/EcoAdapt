@@ -777,6 +777,16 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
   margin-bottom: 18px;
 }
 
+.adv-toggle {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0.05em;
+}
+.adv-toggle:hover { color: var(--amber); }
+
 .form-group { margin-bottom: 16px; }
 
 .form-label {
@@ -1146,6 +1156,56 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
         </div>
 
         <div class="form-group">
+          <label class="form-label">Voice Model</label>
+          <select class="form-select" id="ttsModelSelect">
+            <option value="">Loading models...</option>
+          </select>
+          <div class="personality-preview" id="ttsModelHint" style="margin-top:4px">Fetched live from OpenRouter</div>
+        </div>
+
+        <div class="form-group">
+          <div class="adv-toggle" onclick="toggleAdvanced()">
+            <span id="advChevron">▸</span> Advanced Parameters
+          </div>
+          <div id="advancedParams" style="display:none;margin-top:12px">
+            <div class="form-group">
+              <label class="form-label">Text Temperature</label>
+              <div class="range-row">
+                <input type="range" class="form-range" id="textTemp"
+                      min="0" max="2" step="0.1" value="0.7"
+                      oninput="document.getElementById('textTempVal').textContent=parseFloat(this.value).toFixed(1)">
+                <span class="range-val" id="textTempVal">0.7</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Text Max Tokens</label>
+              <div class="range-row">
+                <input type="range" class="form-range" id="textMaxTok"
+                      min="50" max="500" step="10" value="200"
+                      oninput="document.getElementById('textMaxTokVal').textContent=this.value">
+                <span class="range-val" id="textMaxTokVal">200</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Speech Speed</label>
+              <div class="range-row">
+                <input type="range" class="form-range" id="speechSpeed"
+                      min="0.25" max="4" step="0.25" value="1"
+                      oninput="document.getElementById('speechSpeedVal').textContent=parseFloat(this.value).toFixed(2)">
+                <span class="range-val" id="speechSpeedVal">1.00</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Speech Format</label>
+              <select class="form-select" id="speechFormat">
+                <option value="mp3">MP3</option>
+                <option value="pcm">PCM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
           <label class="form-label">Custom Personality (optional override)</label>
           <textarea class="form-textarea" id="customPersonality"
                     placeholder="Describe your plant's personality..."></textarea>
@@ -1367,6 +1427,7 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
 let ttsEnabled = true;
 let ttsVolume  = 0.8;
 let currentMode = "NORMAL";
+let currentSpecies = "pothos"; // default, updated on config load
 let species = [];
 let charts = {};
 
@@ -1391,7 +1452,7 @@ socket.on("reading", (data) => {
 
 socket.on("speech", (data) => {
   showSpeech(data.text, data.mood);
-  if (ttsEnabled) speak(data.text);
+  if (ttsEnabled) speak(data.text, data.species, data.mood);
 });
 
 socket.on("bridge_status", (data) => {
@@ -1504,8 +1565,40 @@ function showSpeech(text, mood) {
 // ═══════════════════════════════════
 // TTS
 // ═══════════════════════════════════
-function speak(text) {
-  if (!ttsEnabled || !window.speechSynthesis) return;
+async function speak(text, speciesSp, mood) {
+  if (!ttsEnabled) return;
+
+  const sp = speciesSp || currentSpecies;
+
+  // Stop any currently playing audio
+  if (window.currentAudio) {
+    window.currentAudio.pause();
+    window.currentAudio = null;
+  }
+
+  try {
+    const res = await fetch("/api/speak/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text, species: sp, mood: mood || "neutral" })
+    });
+    const data = await res.json();
+    if (data.stream_url) {
+      const audio = new Audio(data.stream_url);
+      audio.volume = ttsVolume;
+      window.currentAudio = audio;
+      audio.play().catch(() => fallbackSpeak(text));
+    } else {
+      fallbackSpeak(text);
+    }
+  } catch (e) {
+    console.error("TTS stream error:", e);
+    fallbackSpeak(text);
+  }
+}
+
+function fallbackSpeak(text) {
+  if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.volume = ttsVolume;
@@ -1559,7 +1652,7 @@ async function sendChat() {
     const data = await res.json();
     if (data.response) {
       showSpeech(data.response, "neutral");
-      if (ttsEnabled) speak(data.response);
+      if (ttsEnabled) speak(data.response, currentSpecies, "neutral");
     }
   } catch(e) {
     addChatMessage("plant", "...(no response)");
@@ -1586,7 +1679,7 @@ async function requestCheckin() {
   const data = await res.json();
   if (data.speech) {
     showSpeech(data.speech, "neutral");
-    if (ttsEnabled) speak(data.speech);
+    if (ttsEnabled) speak(data.speech, currentSpecies, "neutral");
   }
 }
 
@@ -1693,9 +1786,31 @@ async function loadSpecies() {
 
 function updatePersonalityPreview() {
   const id = document.getElementById("speciesSelect").value;
+  currentSpecies = id; // keep global in sync
   const s  = species.find(x => x.id === id);
   document.getElementById("personalityPreview").textContent =
     s ? s.personality_preview : "";
+}
+
+async function loadTTSModels() {
+  const sel = document.getElementById("ttsModelSelect");
+  try {
+    const res = await fetch("/api/tts-models");
+    const models = await res.json();
+    sel.innerHTML = models.map(m =>
+      `<option value="${m.id}">${m.name}</option>`
+    ).join("");
+  } catch (e) {
+    sel.innerHTML = `<option value="">Unable to load models</option>`;
+  }
+}
+
+function toggleAdvanced() {
+  const el = document.getElementById("advancedParams");
+  const ch = document.getElementById("advChevron");
+  const open = el.style.display === "none";
+  el.style.display = open ? "block" : "none";
+  ch.textContent = open ? "▾" : "▸";
 }
 
 async function loadPlantConfig() {
@@ -1713,6 +1828,7 @@ async function loadPlantConfig() {
 
   if (data.species) {
     document.getElementById("speciesSelect").value = data.species;
+    currentSpecies = data.species; // sync global
     updatePersonalityPreview();
   }
 
@@ -1720,16 +1836,44 @@ async function loadPlantConfig() {
     document.getElementById("modelSelect").value = data.model;
   }
 
+  if (data.tts_model) {
+    const ttsSel = document.getElementById("ttsModelSelect");
+    const known = ["openai/gpt-4o-mini-tts-2025-12-15", "google/gemini-3.1-flash-tts-preview"];
+    if (known.includes(data.tts_model)) {
+      ttsSel.value = data.tts_model;
+    }
+  }
+
+  // Advanced params
+  const t = data.text_temperature ?? 0.7;
+  document.getElementById("textTemp").value = t;
+  document.getElementById("textTempVal").textContent = parseFloat(t).toFixed(1);
+
+  const mt = data.text_max_tokens ?? 200;
+  document.getElementById("textMaxTok").value = mt;
+  document.getElementById("textMaxTokVal").textContent = mt;
+
+  const sp = data.speech_speed ?? 1.0;
+  document.getElementById("speechSpeed").value = sp;
+  document.getElementById("speechSpeedVal").textContent = parseFloat(sp).toFixed(2);
+
+  document.getElementById("speechFormat").value = data.speech_format || "mp3";
+
   setModeUI(data.mode || "NORMAL");
   currentMode = data.mode || "NORMAL";
 }
 
 async function savePlantConfig() {
   const payload = {
-    name:        document.getElementById("plantName").value,
-    species:     document.getElementById("speciesSelect").value,
-    personality: document.getElementById("customPersonality").value,
-    model:       document.getElementById("modelSelect").value,
+    name:             document.getElementById("plantName").value,
+    species:          document.getElementById("speciesSelect").value,
+    personality:      document.getElementById("customPersonality").value,
+    model:            document.getElementById("modelSelect").value,
+    tts_model:        document.getElementById("ttsModelSelect").value,
+    text_temperature: parseFloat(document.getElementById("textTemp").value),
+    text_max_tokens:  parseInt(document.getElementById("textMaxTok").value),
+    speech_speed:     parseFloat(document.getElementById("speechSpeed").value),
+    speech_format:    document.getElementById("speechFormat").value,
   };
 
   await fetch("/api/plant", {
@@ -1927,6 +2071,7 @@ const CATEGORY_LABELS = {
   neglect:     "😰 Neglect & Recovery",
   extreme:     "🔥 Extreme",
   birthday:    "🎂 Milestones",
+  chaos:       "🌀 Chaos",
 };
 
 let achSoundCtx = null;
@@ -2051,6 +2196,7 @@ socket.on("achievement", (ach) => {
 async function init() {
   await loadApiKey()
   await loadSpecies();
+  await loadTTSModels();
   await loadPlantConfig();
   await loadRecommendations();
   await loadTamagotchi();
