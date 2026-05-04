@@ -266,7 +266,7 @@ def manual_checkin():
         return jsonify({"speech": speech}), 200
     except Exception as e:
         print("CHECKIN ERROR:", traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500                                                                                                                                      
 
 
 @api.route("/api/tamagotchi", methods=["GET"])
