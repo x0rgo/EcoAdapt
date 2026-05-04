@@ -259,11 +259,10 @@ def manual_checkin():
             "moisture": 55, "temperature": 21.0,
             "light": 3200, "battery": 100
         }
-        plant = get_plant(user["id"])
-        mood  = get_mood(reading, plant.get("species", "pothos"))
+        plant  = get_plant(user["id"])
+        mood   = get_mood(reading, plant.get("species", "pothos"))
         speech = generate_speech("checkin", mood, reading, user["id"])
-        from ws import emit_speech
-        emit_speech(speech, mood)
+        # Don't emit via WebSocket — response goes directly to caller
         return jsonify({"speech": speech}), 200
     except Exception as e:
         print("CHECKIN ERROR:", traceback.format_exc())

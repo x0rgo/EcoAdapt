@@ -206,14 +206,13 @@ def update_tamagotchi(reading, user_id=1):
 
     return build_state(reading, needs, happiness, xp, stage, species_name)
 
-def award_xp(amount, reason="interaction"):
-    """Award XP for non-sensor actions like chatting."""
-    plant = get_plant()
+def award_xp(amount, reason="interaction", user_id=1):
+    plant = get_plant(user_id)
     xp    = float(plant.get("xp", 0)) + amount
     stage = get_stage(xp)
-    save_plant({"xp": round(xp, 1), "stage": stage["id"]})
+    save_plant({"xp": round(xp, 1), "stage": stage["id"]}, user_id)
     return xp
-
+    
 # ─────────────────────────────────────────────────────────
 # STATE BUILDER
 # ─────────────────────────────────────────────────────────
