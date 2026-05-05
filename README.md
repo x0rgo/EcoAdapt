@@ -208,11 +208,11 @@ All plant care thresholds are research-backed:
 
 ## Roadmap
 
-- [ ] Bridge firmware (ESP-NOW + WiFi + offline AP)
-- [ ] Pod firmware (sensors + deep sleep + command handling)
+- [x] Bridge firmware (ESP-NOW + WiFi + offline AP)
+- [x] Pod firmware (sensors + deep sleep + command handling)
 - [ ] OTA firmware updates
 - [ ] Push notifications (Twilio SMS)
-- [ ] Multi-plant support
+- [x](Sort of, not really tested properly but should work in theory) Multi-plant support
 - [ ] Care heatmap calendar
 - [ ] 3D printed enclosure
 
