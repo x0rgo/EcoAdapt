@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoAdapt — Flash Your Bridge</title>
+<style>
+  :root {
+    --green: #2d6a4f;
+    --green-dark: #1b4332;
+    --green-light: #b7e4c7;
+    --bg: #f1faee;
+    --card: #ffffff;
+    --ink: #1d3557;
+    --muted: #6c757d;
+    --danger: #e63946;
+    --warn: #f4a261;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .container { max-width: 760px; margin: 0 auto; padding: 32px 20px; }
+  header { text-align: center; margin-bottom: 32px; }
+  .leaf { font-size: 56px; }
+  h1 { margin: 8px 0 4px; font-size: 28px; }
+  .sub { color: var(--muted); }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.06);
+    margin-bottom: 16px;
+  }
+  .step { display: flex; align-items: flex-start; gap: 14px; }
+  .step-num {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    background: var(--green); color: #fff;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-weight: 700;
+  }
+  .step h3 { margin: 0 0 4px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14px; }
+  select, input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 15px;
+    background: #fafafa;
+    margin-top: 12px;
+  }
+  button {
+    background: var(--green); color: #fff; border: 0;
+    padding: 14px 24px; border-radius: 10px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    width: 100%; margin-top: 12px;
+    transition: background .15s;
+  }
+  button:hover:not(:disabled) { background: var(--green-dark); }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+  button.secondary { background: #e9ecef; color: var(--ink); }
+  button.secondary:hover:not(:disabled) { background: #dee2e6; }
+  .log {
+    background: #0d1b2a; color: #a3e635;
+    padding: 14px; border-radius: 10px;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    max-height: 280px; overflow-y: auto;
+    margin-top: 12px;
+    white-space: pre-wrap;
+  }
+  .status { padding: 12px; border-radius: 10px; margin-top: 12px; font-size: 14px; }
+  .status.info  { background: #e7f5ff; color: #0353a4; }
+  .status.warn  { background: #fff3cd; color: #856404; }
+  .status.error { background: #f8d7da; color: #721c24; }
+  .status.ok    { background: var(--green-light); color: var(--green-dark); }
+  .progress {
+    width: 100%; height: 8px;
+    background: #e9ecef; border-radius: 4px;
+    overflow: hidden; margin-top: 12px;
+  }
+  .progress-bar {
+    height: 100%; background: var(--green);
+    width: 0%; transition: width .2s;
+  }
+  .browser-warn {
+    background: #fff3cd; border-left: 4px solid var(--warn);
+    padding: 14px; border-radius: 8px; margin-bottom: 16px;
+    display: none;
+  }
+  .browser-warn.show { display: block; }
+  .alt {
+    margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid #eee;
+    font-size: 13px; color: var(--muted);
+  }
+  .alt a { color: var(--green); }
+  code { background: #f1f3f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .toggle-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 12px; cursor: pointer; user-select: none;
+    font-weight: 500;
+  }
+  .toggle-row input { width: auto; margin: 0; }
+  .hint {
+    background: #f0f9ff;
+    border-left: 3px solid #38bdf8;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #0369a1;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="leaf">🌿</div>
+  <h1>Flash your EcoAdapt Bridge</h1>
+  <div class="sub">Auto-configure your XIAO ESP32-C3 in 60 seconds</div>
+</header>
+
+<div class="browser-warn" id="browserWarn">
+  ⚠️ Web Serial requires <strong>Chrome, Edge, or Opera</strong> on desktop.
+  Safari and Firefox don't support it. Scroll down for the manual download option.
+</div>
+
+<div class="card">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div style="flex:1">
+      <h3>Choose firmware</h3>
+      <p>Pick which device you're flashing right now.</p>
+      <select id="firmwareType">
+        <option value="bridge">Bridge — USB-powered relay (always-on)</option>
+        <option value="pod">Pod — battery-powered sensor unit</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="step">
+    <div class="step-num">2</div>
+    <div style="flex:1">
+      <h3>Account &amp; server</h3>
+      <p>This is baked into the firmware so the bridge knows where to send data.</p>
+
+      <label style="display:block;font-size:13px;font-weight:600;margin-top:12px">API key</label>
+      <input id="apiKey" placeholder="Loading..." readonly>
+
+      <label style="display:block;font-size:13px;font-weight:600;margin-top:12px">Server URL</label>
+      <input id="serverUrl" value="https://ecoadapt.onrender.com">
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="step">
+    <div class="step-num">3</div>
+    <div style="flex:1">
+      <h3>WiFi (optional)</h3>
+      <p>Pre-stage WiFi so your bridge auto-connects on first boot. Skip this and you can configure WiFi later via Bluetooth or the bridge's setup hotspot.</p>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="wifiEnabled" checked>
+        <span>Pre-stage WiFi credentials</span>
+      </label>
+
+      <div id="wifiFields">
+        <label style="display:block;font-size:13px;font-weight:600;margin-top:12px">Network name (SSID)</label>
+        <input id="wifiSsid" placeholder="e.g. MyHomeWiFi or iPhone-Hotspot" autocomplete="off">
+
+        <label style="display:block;font-size:13px;font-weight:600;margin-top:12px">Password</label>
+        <input id="wifiPass" type="password" placeholder="Leave empty if open network" autocomplete="new-password">
+
+        <div class="hint">
+          💡 Tip: For a science fair demo, name your phone hotspot something easy to remember and pre-stage it here. The bridge will reconnect every time you turn the hotspot on.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="step">
+    <div class="step-num">4</div>
+    <div style="flex:1">
+      <h3>Connect &amp; flash</h3>
+      <p>Plug in your XIAO ESP32-C3 via USB-C. Hold the <strong>BOOT</strong> button while pressing
+         <strong>RESET</strong> to enter download mode (the LED will be off).</p>
+
+      <button id="flashBtn">⚡ Connect & Flash</button>
+      <button id="eraseBtn" class="secondary" style="margin-top:8px">Erase Flash (optional)</button>
+
+      <div class="progress" id="progressWrap" style="display:none">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+
+      <div id="status"></div>
+      <div class="log" id="log" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="step">
+    <div class="step-num">5</div>
+    <div style="flex:1">
+      <h3>Manual flash (fallback)</h3>
+      <p>If Web Serial doesn't work, download the firmware and flash it with esptool from your terminal.</p>
+      <button class="secondary" onclick="downloadFirmware()">⬇ Download .bin + script</button>
+    </div>
+  </div>
+</div>
+
+<div class="alt">
+  <strong>Troubleshooting:</strong> If your browser doesn't see the device, make sure you've installed
+  the CH340 or CP210x USB driver for your operating system. Linux users may need to add their user to the
+  <code>dialout</code> group.
+</div>
+
+</div>
+
+<!-- esptool-js: official Espressif library for in-browser flashing -->
+<script type="module">
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.4.5/lib/index.js?module";
+
+const $ = id => document.getElementById(id);
+const log = $('log');
+const statusEl = $('status');
+const progressWrap = $('progressWrap');
+const progressBar = $('progressBar');
+
+let userApiKey = '';
+let userServerUrl = 'https://ecoadapt.onrender.com';
+
+// --- Browser support check ---
+if (!('serial' in navigator)) {
+  $('browserWarn').classList.add('show');
+  $('flashBtn').disabled = true;
+  $('eraseBtn').disabled = true;
+}
+
+// --- Load user config from session ---
+async function loadUserConfig() {
+  try {
+    const r = await fetch('/api/me/flash-config', { credentials: 'include' });
+    if (!r.ok) throw new Error('Not logged in');
+    const j = await r.json();
+    userApiKey = j.api_key;
+    userServerUrl = j.server_url || 'https://ecoadapt.onrender.com';
+    $('apiKey').value = userApiKey;
+    $('serverUrl').value = userServerUrl;
+  } catch (e) {
+    $('apiKey').value = '(please log in to your dashboard first)';
+    $('flashBtn').disabled = true;
+  }
+}
+loadUserConfig();
+
+function logLine(s, kind='') {
+  log.style.display = 'block';
+  log.textContent += s + '\n';
+  log.scrollTop = log.scrollHeight;
+}
+function setStatus(text, kind='info') {
+  statusEl.innerHTML = `<div class="status ${kind}">${text}</div>`;
+}
+function setProgress(pct) {
+  progressWrap.style.display = 'block';
+  progressBar.style.width = pct + '%';
+}
+
+// --- Build NVS partition image with user's config ---
+// Format reference: ESP-IDF NVS spec. We build a minimal binary with the
+// "ecoadapt" namespace and three keys.
+//
+// For maximum compatibility we use a precomputed NVS template and patch
+// the values at known offsets. The template is generated server-side.
+async function buildConfigBlob() {
+  const apiKey = $('apiKey').value.trim();
+  const serverUrl = $('serverUrl').value.trim();
+  if (!apiKey || apiKey.startsWith('(')) {
+    throw new Error('No API key — please log in to your dashboard first.');
+  }
+  const payload = { api_key: apiKey, server_url: serverUrl };
+
+  // Optionally include WiFi creds. The flasher's body never gets logged
+  // server-side (the route reads them, builds the binary, never persists).
+  if ($('wifiEnabled').checked) {
+    const ssid = $('wifiSsid').value.trim();
+    const pass = $('wifiPass').value;  // do not trim password — spaces are valid
+    if (ssid) {
+      payload.wifi_ssid = ssid;
+      payload.wifi_pass = pass;
+    }
+  }
+
+  // Ask the server to generate a 24KB NVS partition image with our values
+  const r = await fetch('/api/firmware/nvs-image', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    credentials: 'include',
+    body: JSON.stringify(payload)
+  });
+  if (!r.ok) throw new Error('Server failed to build NVS image');
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+// Toggle WiFi fields visibility
+(function() {
+  const cb = $('wifiEnabled');
+  const fields = $('wifiFields');
+  function sync() { fields.style.display = cb.checked ? 'block' : 'none'; }
+  cb.addEventListener('change', sync);
+  sync();
+})();
+
+// --- Fetch firmware bin ---
+async function fetchFirmware(kind) {
+  const r = await fetch(`/firmware/${kind}.bin`);
+  if (!r.ok) throw new Error(`Could not fetch ${kind}.bin (server may not have it built yet)`);
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+async function fetchPartitionTable() {
+  const r = await fetch('/firmware/partitions.bin');
+  if (!r.ok) throw new Error('Could not fetch partitions.bin');
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+async function fetchBootloader() {
+  const r = await fetch('/firmware/bootloader.bin');
+  if (!r.ok) throw new Error('Could not fetch bootloader.bin');
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+function u8ToBinaryString(u8) {
+  let s = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+  }
+  return s;
+}
+
+// --- Flash flow ---
+$('flashBtn').addEventListener('click', async () => {
+  $('flashBtn').disabled = true;
+  $('eraseBtn').disabled = true;
+  setStatus('Requesting serial port…', 'info');
+  log.textContent = '';
+
+  let transport, esploader;
+  try {
+    const port = await navigator.serial.requestPort({});
+    transport = new Transport(port, true);
+
+    esploader = new ESPLoader({
+      transport,
+      baudrate: 460800,
+      terminal: {
+        clean()      { log.textContent = ''; },
+        writeLine(d) { logLine(d); },
+        write(d)     { log.textContent += d; }
+      }
+    });
+
+    setStatus('Connecting to ESP32…', 'info');
+    const chip = await esploader.main();
+    logLine(`Detected: ${chip}`);
+
+    // Load all the parts
+    const kind = $('firmwareType').value;
+    setStatus(`Downloading ${kind} firmware…`, 'info');
+    const [bootloader, partitions, app, nvs] = await Promise.all([
+      fetchBootloader(),
+      fetchPartitionTable(),
+      fetchFirmware(kind),
+      buildConfigBlob()
+    ]);
+
+    // ESP32-C3 standard offsets:
+    //   0x0000  bootloader.bin
+    //   0x8000  partitions.bin
+    //   0x9000  nvs (24KB by default)
+    //   0x10000 app
+    const fileArray = [
+      { data: u8ToBinaryString(bootloader), address: 0x0000 },
+      { data: u8ToBinaryString(partitions), address: 0x8000 },
+      { data: u8ToBinaryString(nvs),        address: 0x9000 },
+      { data: u8ToBinaryString(app),        address: 0x10000 },
+    ];
+
+    setStatus('Flashing — do not unplug…', 'warn');
+    setProgress(0);
+
+    await esploader.writeFlash({
+      fileArray,
+      flashSize: 'keep',
+      flashMode: 'keep',
+      flashFreq: 'keep',
+      eraseAll: false,
+      compress: true,
+      reportProgress: (idx, written, total) => {
+        const pct = Math.round((written / total) * 100);
+        setProgress(pct);
+      },
+      calculateMD5Hash: () => '',
+    });
+
+    setProgress(100);
+    setStatus('✅ Flash complete! Resetting device…', 'ok');
+    await esploader.hardReset();
+    logLine('Done. Your bridge will boot in a few seconds.');
+
+  } catch (err) {
+    console.error(err);
+    setStatus('❌ ' + err.message, 'error');
+    logLine('ERROR: ' + (err.stack || err.message));
+  } finally {
+    if (transport) {
+      try { await transport.disconnect(); } catch(e){}
+    }
+    $('flashBtn').disabled = false;
+    $('eraseBtn').disabled = false;
+  }
+});
+
+$('eraseBtn').addEventListener('click', async () => {
+  $('flashBtn').disabled = true;
+  $('eraseBtn').disabled = true;
+  setStatus('Erasing flash…', 'warn');
+  log.textContent = '';
+  let transport, esploader;
+  try {
+    const port = await navigator.serial.requestPort({});
+    transport = new Transport(port, true);
+    esploader = new ESPLoader({
+      transport, baudrate: 460800,
+      terminal: {
+        clean(){ log.textContent=''; },
+        writeLine(d){ logLine(d); },
+        write(d){ log.textContent += d; }
+      }
+    });
+    await esploader.main();
+    await esploader.eraseFlash();
+    setStatus('✅ Erase complete', 'ok');
+  } catch (err) {
+    setStatus('❌ ' + err.message, 'error');
+  } finally {
+    if (transport) try { await transport.disconnect(); } catch(e){}
+    $('flashBtn').disabled = false;
+    $('eraseBtn').disabled = false;
+  }
+});
+
+window.downloadFirmware = async function() {
+  const kind = $('firmwareType').value;
+  const apiKey = $('apiKey').value.trim();
+  const serverUrl = $('serverUrl').value.trim();
+  if (!apiKey || apiKey.startsWith('(')) {
+    alert('Please log in to your dashboard first.');
+    return;
+  }
+  const url = `/api/firmware/bundle.zip?kind=${kind}` +
+              `&api_key=${encodeURIComponent(apiKey)}` +
+              `&server_url=${encodeURIComponent(serverUrl)}`;
+  window.location.href = url;
+};
+</script>
+</body>
+</html>

@@ -1,14 +1,17 @@
 import os
+from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
-from db import init_db, get_latest, get_plant
-from api import api
-from ws import socketio
-from dotenv import load_dotenv
+
 load_dotenv()
 
-from auth import auth as auth_blueprint, login_required
+from lib.db import init_db, get_latest, get_plant
+from lib.api import api
+from lib.ws import socketio
+
+from lib.auth import auth as auth_blueprint, login_required
+from lib.flash_routes import flash_bp
 
 def create_app():
     app = Flask(__name__, static_folder="static", static_url_path="")
@@ -18,6 +21,7 @@ def create_app():
     socketio.init_app(app)
     app.register_blueprint(auth_blueprint)
     app.register_blueprint(api)
+    app.register_blueprint(flash_bp)
 
     @app.route("/")
     @login_required
@@ -31,9 +35,9 @@ def start_scheduler(app):
 
     def checkin_job():
         with app.app_context():
-            from personality import daily_checkin
-            from ws import emit_speech
-            from thresholds import get_mood
+            from lib.personality import daily_checkin
+            from lib.ws import emit_speech
+            from lib.thresholds import get_mood
 
             reading = get_latest()
             if not reading:

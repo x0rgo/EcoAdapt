@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoAdapt — Pair Your Bridge</title>
+<style>
+  :root {
+    --green: #2d6a4f; --green-dark: #1b4332; --green-light: #b7e4c7;
+    --bg: #f1faee; --card: #fff; --ink: #1d3557;
+    --muted: #6c757d; --danger: #e63946; --warn: #f4a261;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.5;
+  }
+  .container { max-width: 560px; margin: 0 auto; padding: 32px 20px; }
+  header { text-align: center; margin-bottom: 32px; }
+  .leaf { font-size: 56px; }
+  h1 { margin: 8px 0 4px; font-size: 26px; }
+  .sub { color: var(--muted); }
+  .card {
+    background: var(--card); border-radius: 16px;
+    padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,.06);
+    margin-bottom: 16px;
+  }
+  label { display:block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+  input, select {
+    width: 100%; padding: 12px 14px;
+    border: 1px solid #ddd; border-radius: 10px;
+    font-size: 15px; background: #fafafa;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--green); background: #fff; }
+  button {
+    background: var(--green); color: #fff; border: 0;
+    padding: 14px 24px; border-radius: 10px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    width: 100%; margin-top: 16px;
+    transition: background .15s;
+  }
+  button:hover:not(:disabled) { background: var(--green-dark); }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+  .status { padding: 12px; border-radius: 10px; margin-top: 12px; font-size: 14px; }
+  .status.info  { background: #e7f5ff; color: #0353a4; }
+  .status.warn  { background: #fff3cd; color: #856404; }
+  .status.error { background: #f8d7da; color: #721c24; }
+  .status.ok    { background: var(--green-light); color: var(--green-dark); }
+  .browser-warn {
+    background: #fff3cd; border-left: 4px solid var(--warn);
+    padding: 14px; border-radius: 8px; margin-bottom: 16px; display: none;
+  }
+  .browser-warn.show { display: block; }
+  ol { padding-left: 20px; }
+  ol li { margin-bottom: 8px; }
+  .device-name { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div class="leaf">📡</div>
+  <h1>Pair your bridge</h1>
+  <div class="sub">Send WiFi credentials over Bluetooth — no wires, no captive portal.</div>
+</header>
+
+<div class="browser-warn" id="browserWarn">
+  ⚠️ Web Bluetooth requires <strong>Chrome, Edge, or Opera</strong> on desktop, or <strong>Chrome on Android</strong>.
+  iOS Safari does not support it — use the captive portal method on iPhone.
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0">How it works</h3>
+  <ol>
+    <li>Power on your bridge (USB).</li>
+    <li>If it has no WiFi configured, it advertises over BLE for 60 seconds. Look for a device named <span class="device-name">EcoAdapt-XXXX</span>.</li>
+    <li>Click <strong>Pair</strong> below, pick the device.</li>
+    <li>Enter your WiFi info — bridge connects and reboots.</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0">WiFi credentials</h3>
+  <label>Network name (SSID)</label>
+  <input id="ssid" placeholder="e.g. MyHomeWiFi" autocomplete="off">
+  <label>Password</label>
+  <input id="pass" type="password" placeholder="Leave empty if open" autocomplete="new-password">
+  <button id="pairBtn">📡 Pair via Bluetooth</button>
+  <div id="status"></div>
+</div>
+
+<div class="card">
+  <p style="margin:0;color:var(--muted);font-size:13px">
+    Prefer to pre-stage WiFi when flashing? <a href="/flash">Use the web flasher instead</a> — it bakes
+    WiFi into the firmware so the bridge connects on first boot with no Bluetooth pairing needed.
+  </p>
+</div>
+
+</div>
+
+<script>
+const SVC_UUID  = "ec0adap1-2025-4b1d-9e91-100000000000";
+const WIFI_UUID = "ec0adap1-2025-4b1d-9e91-100000000001";
+const STAT_UUID = "ec0adap1-2025-4b1d-9e91-100000000002";
+
+const $ = id => document.getElementById(id);
+function setStatus(text, kind = 'info') {
+  $('status').innerHTML = `<div class="status ${kind}">${text}</div>`;
+}
+
+if (!navigator.bluetooth) {
+  $('browserWarn').classList.add('show');
+  $('pairBtn').disabled = true;
+}
+
+let userApiKey = '';
+let userServerUrl = window.location.origin;
+
+// Get the user's API key so we can include it in the BLE write
+// (covers the case where they pair via BLE without using the web flasher)
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/me/flash-config', { credentials: 'include' });
+    if (r.ok) {
+      const j = await r.json();
+      userApiKey = j.api_key;
+      userServerUrl = j.server_url || window.location.origin;
+    }
+  } catch (e) { /* not logged in is ok */ }
+}
+loadConfig();
+
+$('pairBtn').addEventListener('click', async () => {
+  const ssid = $('ssid').value.trim();
+  const pass = $('pass').value;
+  if (!ssid) {
+    setStatus('Please enter an SSID.', 'error');
+    return;
+  }
+
+  $('pairBtn').disabled = true;
+  setStatus('Scanning for EcoAdapt bridges…', 'info');
+
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SVC_UUID] }],
+      optionalServices: [SVC_UUID]
+    });
+
+    setStatus(`Connecting to ${device.name || 'bridge'}…`, 'info');
+    const server = await device.gatt.connect();
+    const svc = await server.getPrimaryService(SVC_UUID);
+
+    // Subscribe to status notifications BEFORE writing so we don't miss the reply
+    let statusChr;
+    try {
+      statusChr = await svc.getCharacteristic(STAT_UUID);
+      await statusChr.startNotifications();
+      statusChr.addEventListener('characteristicvaluechanged', e => {
+        const v = new TextDecoder().decode(e.target.value);
+        console.log('[BLE status]', v);
+        if (v.startsWith('ok')) {
+          setStatus('✅ Credentials received! Bridge is rebooting and will connect to WiFi shortly.', 'ok');
+        } else if (v.startsWith('err')) {
+          setStatus('❌ Bridge reported error: ' + v, 'error');
+        }
+      });
+    } catch (e) { console.warn('no status char', e); }
+
+    setStatus('Sending credentials…', 'info');
+    const wifiChr = await svc.getCharacteristic(WIFI_UUID);
+    const payload = {
+      ssid: ssid,
+      pass: pass,
+      api_key: userApiKey,
+      server_url: userServerUrl
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    await wifiChr.writeValue(bytes);
+
+    // Give the bridge a moment to notify back, then disconnect
+    setTimeout(() => {
+      try { device.gatt.disconnect(); } catch (e) {}
+    }, 2000);
+
+  } catch (err) {
+    console.error(err);
+    if (err.name === 'NotFoundError') {
+      setStatus('No bridge found. Make sure it is powered on and in BLE provisioning mode (within the first 60s after boot).', 'warn');
+    } else {
+      setStatus('❌ ' + err.message, 'error');
+    }
+  } finally {
+    $('pairBtn').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
