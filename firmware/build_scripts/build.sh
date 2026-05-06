@@ -36,8 +36,8 @@ build_one () {
   arduino-cli compile \
     --fqbn "$FQBN" \
     --build-path "$build_dir" \
-    --build-property "build.partitions=default" \
-    --build-property "upload.maximum_size=1310720" \
+    --build-property "build.partitions=min_spiffs" \
+    --build-property "upload.maximum_size=1966080" \
     "$sketch_dir"
 
   # arduino-cli output naming: <sketch>.ino.bin

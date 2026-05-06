@@ -283,8 +283,7 @@ void pollCommands() {
 static volatile bool bleProvDone = false;
 
 class WifiWriteCb : public NimBLECharacteristicCallbacks {
-  void onWrite(NimBLECharacteristic* chr) override {
-    std::string val = chr->getValue();
+  void onWrite(NimBLECharacteristic* chr, NimBLEConnInfo& connInfo) override {    std::string val = chr->getValue();
     Serial.printf("[BLE] wifi write: %s\n", val.c_str());
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, val) != DeserializationError::Ok) {
