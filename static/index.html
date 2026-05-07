@@ -7,7 +7,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+<script src="/pet.js"></script>
 <style>
+/* Pet SVG */
+#petSvg { cursor: pointer; overflow: visible; display: block; margin: 0 auto 8px; }
+#petGroup { transform-box: fill-box; transform-origin: center bottom; }
+#eyeL, #eyeR { transform-box: fill-box; transform-origin: center; }
+#leaf1, #leaf2, #leaf3, #leaf4 { transform-box: fill-box; }
+
 /* Achievement toast */
 .ach-toast {
   position: fixed;
@@ -1318,8 +1326,91 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
     <!-- Stage + happiness -->
     <div class="live-grid">
 
-      <div class="sensor-card" style="text-align:center;padding:32px 20px">
-        <div id="stageEmoji" style="font-size:72px;line-height:1;margin-bottom:12px">🌰</div>
+      <div class="sensor-card" style="text-align:center;padding:20px 20px 28px">
+
+        <svg id="petSvg" viewBox="0 0 200 260" width="160" height="208">
+          <g id="petGroup">
+            <!-- Pot -->
+            <rect x="48" y="183" width="104" height="14" rx="7" fill="#8B5E3C"/>
+            <rect x="52" y="184" width="48" height="6" rx="3" fill="#A07040" opacity="0.45"/>
+            <path d="M60,197 L140,197 L130,252 L70,252 Z" fill="#C1694F"/>
+            <path d="M67,197 L78,197 L72,249 L63,244 Z" fill="#D4845A" opacity="0.4"/>
+            <path d="M133,197 L140,197 L130,252 L125,252 Z" fill="#A04535" opacity="0.28"/>
+            <ellipse cx="100" cy="192" rx="44" ry="8" fill="#4E2E14"/>
+            <ellipse cx="100" cy="190" rx="38" ry="4.5" fill="#5C3A1E" opacity="0.55"/>
+
+            <!-- Stem -->
+            <path d="M100,190 C98,170 102,152 99,132 C97,116 101,98 100,82" stroke="#4A7C40" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+
+            <!-- Leaf 1 — lower left (position wrapper + rotatable inner) -->
+            <g transform="translate(86,155)">
+              <g id="leaf1" style="transform-origin:0px 12px;transform:rotate(-40deg)">
+                <path class="petLeaf" d="M0,14 C-17,5 -15,-18 0,-22 C15,-18 17,5 0,14" fill="#5A9E4A" stroke="#3E7234" stroke-width="0.8"/>
+                <path d="M0,14 C0,4 0,-14 0,-22" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
+              </g>
+            </g>
+
+            <!-- Leaf 2 — lower right -->
+            <g transform="translate(114,140)">
+              <g id="leaf2" style="transform-origin:0px 12px;transform:rotate(50deg)">
+                <path class="petLeaf" d="M0,14 C-17,5 -15,-18 0,-22 C15,-18 17,5 0,14" fill="#6DB35A" stroke="#3E7234" stroke-width="0.8"/>
+                <path d="M0,14 C0,4 0,-14 0,-22" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
+              </g>
+            </g>
+
+            <!-- Leaf 3 — upper left -->
+            <g transform="translate(80,118)">
+              <g id="leaf3" style="transform-origin:0px 11px;transform:rotate(-52deg)">
+                <path class="petLeaf" d="M0,13 C-15,4 -13,-16 0,-20 C13,-16 15,4 0,13" fill="#4E9040" stroke="#3E7234" stroke-width="0.8"/>
+                <path d="M0,13 C0,3 0,-13 0,-20" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
+              </g>
+            </g>
+
+            <!-- Leaf 4 — upper right (small) -->
+            <g transform="translate(118,105)">
+              <g id="leaf4" style="transform-origin:0px 10px;transform:rotate(38deg)">
+                <path class="petLeaf" d="M0,12 C-13,4 -11,-14 0,-18 C11,-14 13,4 0,12" fill="#5A9E4A" stroke="#3E7234" stroke-width="0.8"/>
+                <path d="M0,12 C0,3 0,-12 0,-18" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
+              </g>
+            </g>
+
+            <!-- Face (centered at 100,118) -->
+            <g transform="translate(100,118)">
+              <!-- Blush cheeks -->
+              <ellipse cx="-22" cy="7" rx="7" ry="5" fill="#FF9999" opacity="0.28"/>
+              <ellipse cx="22"  cy="7" rx="7" ry="5" fill="#FF9999" opacity="0.28"/>
+
+              <!-- Left eye -->
+              <g transform="translate(-15,0)">
+                <g id="eyeL">
+                  <circle r="9" fill="white"/>
+                  <circle id="pupilL" cx="0" cy="0" r="5" fill="#3a3020"/>
+                  <circle cx="2.5" cy="-2.5" r="1.8" fill="white" opacity="0.9"/>
+                </g>
+              </g>
+
+              <!-- Right eye -->
+              <g transform="translate(15,0)">
+                <g id="eyeR">
+                  <circle r="9" fill="white"/>
+                  <circle id="pupilR" cx="0" cy="0" r="5" fill="#3a3020"/>
+                  <circle cx="2.5" cy="-2.5" r="1.8" fill="white" opacity="0.9"/>
+                </g>
+              </g>
+
+              <!-- Eyebrows -->
+              <path id="browL" d="M -22,-11 Q -14,-15 -7,-11" stroke="#5a4030" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+              <path id="browR" d="M 7,-11 Q 14,-15 22,-11"   stroke="#5a4030" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+
+              <!-- Mouth -->
+              <path id="petMouth" d="M -9,14 Q 0,19 9,14" stroke="#5a4030" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- Particle effects layer -->
+            <g id="petFx"></g>
+          </g>
+        </svg>
+
         <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--green)" id="stageName">Seed</div>
         <div style="font-size:11px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace" id="stageDesc">Just starting out.</div>
         <div style="margin-top:20px">
@@ -1452,10 +1543,12 @@ socket.on("disconnect", () => {
 socket.on("reading", (data) => {
   updateReadings(data);
   loadRecommendations();
+  Pet.onReading(data);
 });
 
 socket.on("speech", (data) => {
   showSpeech(data.text, data.mood);
+  Pet.onSpeechStart();
   if (ttsEnabled) speak(data.text, data.species, data.mood);
 });
 
@@ -1590,8 +1683,10 @@ async function speak(text, speciesSp, mood) {
     if (data.stream_url) {
       const audio = new Audio(data.stream_url);
       audio.volume = ttsVolume;
+      audio.addEventListener('ended', () => Pet.onSpeechEnd());
+      audio.addEventListener('error', () => Pet.onSpeechEnd());
       window.currentAudio = audio;
-      audio.play().catch(() => fallbackSpeak(text));
+      audio.play().catch(() => { Pet.onSpeechEnd(); fallbackSpeak(text); });
     } else {
       fallbackSpeak(text);
     }
@@ -2010,7 +2105,6 @@ function updateTamagotchi(data) {
 
   // Stage
   const stage = data.stage;
-  document.getElementById("stageEmoji").textContent = stage.emoji;
   document.getElementById("stageName").textContent  = stage.name;
   document.getElementById("stageDesc").textContent  = stage.desc;
 
@@ -2188,6 +2282,7 @@ async function loadAchievements() {
 // WebSocket achievement listener
 socket.on("achievement", (ach) => {
   showAchievementToast(ach);
+  Pet.onAchievement();
   // Refresh achievements panel if open
   if (document.getElementById("tab-achievements").classList.contains("active")) {
     loadAchievements();
@@ -2198,6 +2293,7 @@ socket.on("achievement", (ach) => {
 // INIT
 // ═══════════════════════════════════
 async function init() {
+  Pet.init();
   await loadApiKey()
   await loadSpecies();
   await loadTTSModels();
@@ -2220,7 +2316,7 @@ async function init() {
   // Load initial reading
   const res  = await fetch("/api/readings");
   const data = await res.json();
-  if (data.moisture !== undefined) updateReadings(data);
+  if (data.moisture !== undefined) { updateReadings(data); Pet.onReading(data); }
 
   // Load last utterance
   const uttRes  = await fetch("/api/utterances?limit=1");
