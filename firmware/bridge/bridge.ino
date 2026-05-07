@@ -216,10 +216,13 @@ bool postReading(const ReadingPacket& p) {
   if (apiKey.isEmpty() || WiFi.status() != WL_CONNECTED) return false;
 
   WiFiClientSecure client;
-  client.setInsecure(); // demo. For production use a CA bundle.
+  client.setInsecure();
+  client.setTimeout(30);        // seconds — allows for Render cold-start
   HTTPClient http;
+  http.setTimeout(30000);       // ms
 
   String url = serverUrl + "/api/reading";
+  Serial.printf("[HTTP] url=%s key=%s\n", url.c_str(), apiKey.substring(0,8).c_str());
   if (!http.begin(client, url)) {
     Serial.println("[HTTP] begin FAIL");
     return false;
