@@ -1905,16 +1905,11 @@ async function loadHistory(hours, btn) {
 
   const update = (id, key, label, color) => {
     const vals = data.map(d => d[key]);
-    if (charts[id]) {
-      charts[id].data.labels = labels;
-      charts[id].data.datasets[0].data = vals;
-      charts[id].update();
-    } else {
-      charts[id] = new Chart(
-        document.getElementById(id),
-        chartConfig(label, color, vals, labels)
-      );
-    }
+    if (charts[id]) { charts[id].destroy(); }
+    charts[id] = new Chart(
+      document.getElementById(id),
+      chartConfig(label, color, vals, labels)
+    );
   };
 
   update("moistureChart", "moisture",    "Moisture %",   "#7ec44f");
