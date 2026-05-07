@@ -342,19 +342,30 @@ function u8ToBinaryString(u8) {
   return s;
 }
 
+// Pre-load esptool-js the moment the page opens so it's ready when a button is clicked.
+// Dynamic import() inside a click handler can expire the browser's user-gesture window
+// before requestPort() is called, causing it to silently fail.
+const _esptoolReady = import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.5/+esm');
+
+function _terminal() {
+  return {
+    clean(){ $('log').textContent=''; },
+    writeLine: logLine,
+    write(d){ $('log').textContent+=d; }
+  };
+}
+
 // --- Flash ---
 $('flashBtn').addEventListener('click', async () => {
   $('flashBtn').disabled = true; $('eraseBtn').disabled = true;
   $('log').textContent = '';
-  setStatus('Loading flasher library…', 'info');
+  setStatus('Connecting…', 'info');
   let transport;
   try {
-    const { ESPLoader, Transport } = await import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.5/+esm');
+    const { ESPLoader, Transport } = await _esptoolReady;
     const port = await navigator.serial.requestPort({});
     transport = new Transport(port, true);
-    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal: {
-      clean(){ $('log').textContent=''; }, writeLine: logLine, write(d){ $('log').textContent+=d; }
-    }});
+    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal: _terminal() });
     setStatus('Connecting to ESP32…', 'info');
     logLine(`Detected: ${await esploader.main()}`);
 
@@ -376,14 +387,14 @@ $('flashBtn').addEventListener('click', async () => {
         { data: u8ToBinaryString(app),        address: 0x10000 },
       ],
       flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep',
-      eraseAll: false, compress: true,
+      eraseAll: false, compress: false,
       reportProgress: (_, written, total) => setProgress(Math.round(written/total*100)),
       calculateMD5Hash: () => '',
     });
     setProgress(100);
     setStatus('✅ Flash complete! Resetting…', 'ok');
     await esploader.hardReset();
-    logLine('Done. Your bridge will boot in a few seconds.');
+    logLine('Done. Your device will boot in a few seconds.');
   } catch (err) {
     setStatus('❌ ' + err.message, 'error');
     logLine('ERROR: ' + (err.stack || err.message));
@@ -397,20 +408,20 @@ $('flashBtn').addEventListener('click', async () => {
 $('eraseBtn').addEventListener('click', async () => {
   $('flashBtn').disabled = true; $('eraseBtn').disabled = true;
   $('log').textContent = '';
-  setStatus('Loading flasher library…', 'info');
+  setStatus('Connecting…', 'info');
   let transport;
   try {
-    const { ESPLoader, Transport } = await import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.5/+esm');
+    const { ESPLoader, Transport } = await _esptoolReady;
     const port = await navigator.serial.requestPort({});
     transport = new Transport(port, true);
-    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal: {
-      clean(){ $('log').textContent=''; }, writeLine: logLine, write(d){ $('log').textContent+=d; }
-    }});
+    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal: _terminal() });
     await esploader.main();
+    setStatus('Erasing flash — takes ~30s, do not unplug…', 'warn');
     await esploader.eraseFlash();
-    setStatus('✅ Erase complete', 'ok');
+    setStatus('✅ Erase complete — now click Connect & Flash', 'ok');
   } catch (err) {
     setStatus('❌ ' + err.message, 'error');
+    logLine('ERROR: ' + (err.stack || err.message));
   } finally {
     if (transport) try { await transport.disconnect(); } catch(_){}
     $('flashBtn').disabled = false; $('eraseBtn').disabled = false;
