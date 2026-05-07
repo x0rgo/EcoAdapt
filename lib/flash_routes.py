@@ -285,11 +285,16 @@ def make_nvs_image():
         nvs_values["wifi_ssid"] = wifi_ssid
         nvs_values["wifi_pass"] = wifi_pass  # may be empty for open networks
 
-    image = build_nvs_image(nvs_values)
+    try:
+        image = build_nvs_image(nvs_values)
+    except Exception as e:
+        import traceback
+        print("NVS BUILD ERROR:", traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
     resp = make_response(image)
     resp.headers["Content-Type"] = "application/octet-stream"
     resp.headers["Content-Disposition"] = 'attachment; filename="nvs.bin"'
-    # Ensure WiFi creds are never cached anywhere downstream
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
     resp.headers["Pragma"] = "no-cache"
     return resp
