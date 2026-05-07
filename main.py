@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 from apscheduler.schedulers.background import BackgroundScheduler
 
 load_dotenv()
@@ -16,6 +17,7 @@ from lib.flash_routes import flash_bp
 def create_app():
     app = Flask(__name__, static_folder="static", static_url_path="")
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "ecoadapt-dev-key")
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     CORS(app)
     socketio.init_app(app)

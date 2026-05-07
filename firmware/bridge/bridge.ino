@@ -212,18 +212,27 @@ bool connectWifi(uint32_t timeoutMs = 20000) {
   return false;
 }
 
+bool httpBegin(HTTPClient& http, const String& url) {
+  if (url.startsWith("https://")) {
+    static WiFiClientSecure sc;
+    sc.setInsecure();
+    sc.setTimeout(30);
+    return http.begin(sc, url);
+  } else {
+    static WiFiClient c;
+    return http.begin(c, url);
+  }
+}
+
 bool postReading(const ReadingPacket& p) {
   if (apiKey.isEmpty() || WiFi.status() != WL_CONNECTED) return false;
 
-  WiFiClientSecure client;
-  client.setInsecure();
-  client.setTimeout(30);        // seconds — allows for Render cold-start
   HTTPClient http;
-  http.setTimeout(30000);       // ms
+  http.setTimeout(30000);
 
   String url = serverUrl + "/api/reading";
   Serial.printf("[HTTP] url=%s key=%s\n", url.c_str(), apiKey.substring(0,8).c_str());
-  if (!http.begin(client, url)) {
+  if (!httpBegin(http, url)) {
     Serial.println("[HTTP] begin FAIL");
     return false;
   }
@@ -247,12 +256,10 @@ bool postReading(const ReadingPacket& p) {
 void pollCommands() {
   if (apiKey.isEmpty() || WiFi.status() != WL_CONNECTED) return;
 
-  WiFiClientSecure client;
-  client.setInsecure();
   HTTPClient http;
 
   String url = serverUrl + "/api/commands/pending";
-  if (!http.begin(client, url)) return;
+  if (!httpBegin(http, url)) return;
   http.addHeader("X-API-Key", apiKey);
 
   int code = http.GET();
