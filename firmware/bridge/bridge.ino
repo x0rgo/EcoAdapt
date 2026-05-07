@@ -38,6 +38,7 @@
 #define AP_PASS            ""           // open AP for setup
 #define DEFAULT_SERVER_URL "https://ecoadapt.onrender.com"
 #define POLL_INTERVAL_MS   5000
+#define LED_BUILTIN        8    // XIAO ESP32-C3
 #define BLE_PROV_TIMEOUT_MS 60000      // 60s BLE provisioning window before falling back to AP
 
 // BLE provisioning UUIDs (random, but stable so the dashboard can scan for them)
@@ -227,12 +228,10 @@ bool postReading(const ReadingPacket& p) {
   http.addHeader("X-API-Key", apiKey);
 
   StaticJsonDocument<256> doc;
-  doc["pod_id"]      = p.pod_id;
   doc["moisture"]    = p.moisture_pct;
   doc["temperature"] = p.temp_c;
   doc["light"]       = p.lux;
   doc["battery"]     = p.battery_v;
-  doc["boot_count"]  = p.boot_count;
   String body;
   serializeJson(doc, body);
 
@@ -258,7 +257,7 @@ void pollCommands() {
     String body = http.getString();
     StaticJsonDocument<1024> doc;
     if (deserializeJson(doc, body) == DeserializationError::Ok) {
-      JsonArray cmds = doc["commands"].as<JsonArray>();
+      JsonArray cmds = doc.as<JsonArray>();
       for (JsonObject cmd : cmds) {
         String s;
         serializeJson(cmd, s);
@@ -283,7 +282,8 @@ void pollCommands() {
 static volatile bool bleProvDone = false;
 
 class WifiWriteCb : public NimBLECharacteristicCallbacks {
-  void onWrite(NimBLECharacteristic* chr, NimBLEConnInfo& connInfo) override {    std::string val = chr->getValue();
+  void onWrite(NimBLECharacteristic* chr, NimBLEConnInfo& connInfo) override {
+    std::string val = chr->getValue();
     Serial.printf("[BLE] wifi write: %s\n", val.c_str());
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, val) != DeserializationError::Ok) {
