@@ -283,13 +283,16 @@ void pollCommands() {
 static volatile bool bleProvDone = false;
 
 class WifiWriteCb : public NimBLECharacteristicCallbacks {
+  NimBLECharacteristic* _stat;
+public:
+  WifiWriteCb(NimBLECharacteristic* stat) : _stat(stat) {}
   void onWrite(NimBLECharacteristic* chr) override {
     std::string val = chr->getValue();
     Serial.printf("[BLE] wifi write: %s\n", val.c_str());
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, val) != DeserializationError::Ok) {
-      chr->setValue("err:json");
-      chr->notify();
+      _stat->setValue("err:json");
+      _stat->notify();
       return;
     }
     const char* s = doc["ssid"] | "";
@@ -297,8 +300,8 @@ class WifiWriteCb : public NimBLECharacteristicCallbacks {
     const char* k = doc["api_key"] | "";
     const char* u = doc["server_url"] | "";
     if (!s || !*s) {
-      chr->setValue("err:no-ssid");
-      chr->notify();
+      _stat->setValue("err:no-ssid");
+      _stat->notify();
       return;
     }
     prefs.begin("ecoadapt", false);
@@ -308,8 +311,8 @@ class WifiWriteCb : public NimBLECharacteristicCallbacks {
     if (u && *u) prefs.putString("server_url", u);
     prefs.end();
 
-    chr->setValue("ok:reboot");
-    chr->notify();
+    _stat->setValue("ok:reboot");
+    _stat->notify();
     bleProvDone = true;
   }
 };
@@ -325,15 +328,16 @@ bool runBleProvisioning(uint32_t timeoutMs) {
 
   NimBLECharacteristic* wifiChr = svc->createCharacteristic(
     BLE_CHR_WIFI_UUID,
-    NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY
+    NIMBLE_PROPERTY::WRITE
   );
-  wifiChr->setCallbacks(new WifiWriteCb());
 
   NimBLECharacteristic* statusChr = svc->createCharacteristic(
     BLE_CHR_STATUS_UUID,
     NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
   );
   statusChr->setValue("waiting");
+
+  wifiChr->setCallbacks(new WifiWriteCb(statusChr));
 
   svc->start();
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
