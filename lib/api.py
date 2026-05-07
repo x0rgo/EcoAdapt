@@ -20,6 +20,10 @@ _bridge_heartbeat_interval = 60
 # In-memory registry for audio stream tokens (single-user hobby scale)
 _stream_registry = {}
 
+# Remote debug log — last 100 messages from pod (in-memory, resets on server restart)
+_debug_log = []
+_DEBUG_LOG_MAX = 100
+
 def _cleanup_streams():
     now = time.time()
     expired = [sid for sid, cfg in _stream_registry.items() if now - cfg.get("created", 0) > 300]
@@ -92,6 +96,44 @@ def receive_reading():
         emit_speech(speech, get_mood(reading, species), species)
 
     return jsonify({"ok": True, "speech": speech, "tamagotchi": tama_state}), 200
+
+
+@api.route("/api/pod-debug", methods=["POST"])
+@api_key_or_login_required
+def receive_pod_debug():
+    body = request.get_json()
+    if not body:
+        return jsonify({"error": "no data"}), 400
+
+    entry = {
+        "ts":     time.time(),
+        "pod_id": body.get("pod_id", "unknown"),
+        "data":   body.get("data", {}),
+    }
+    _debug_log.append(entry)
+    if len(_debug_log) > _DEBUG_LOG_MAX:
+        _debug_log.pop(0)
+
+    from lib.ws import socketio
+    socketio.emit("pod_debug", entry)
+    return jsonify({"ok": True}), 200
+
+
+@api.route("/api/pod-debug", methods=["GET"])
+@login_required
+def get_pod_debug():
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(_debug_log[-limit:]), 200
+
+
+@api.route("/api/pod-debug/enable", methods=["POST"])
+@login_required
+def toggle_pod_debug():
+    user = get_current_user()
+    body = request.get_json(silent=True) or {}
+    enabled = bool(body.get("enabled", True))
+    queue_command("SET_DEBUG", f'{{"value": {"true" if enabled else "false"}}}', user["id"])
+    return jsonify({"ok": True, "debug": enabled}), 200
 
 
 @api.route("/api/status", methods=["POST"])

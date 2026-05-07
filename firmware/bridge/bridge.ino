@@ -82,10 +82,21 @@ typedef struct __attribute__((packed)) {
   char payload[200];
 } CommandPacket;
 
+typedef struct __attribute__((packed)) {
+  char type[8];
+  char pod_id[24];
+  char payload[200];
+} DebugPacket;
+
 // Latest reading buffered for offline dashboard
 ReadingPacket lastReading = {};
 bool hasReading = false;
 unsigned long lastReadingMs = 0;
+
+// Debug log buffering
+char    pendingDebugPayload[200] = {0};
+char    pendingDebugPodId[24]    = {0};
+bool    debugReceived            = false;
 
 // =================== NVS ===================
 void loadConfig() {
@@ -145,6 +156,14 @@ void onDataRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
       savePodMac(info->src_addr);
       Serial.println("[POD] paired");
     }
+  } else if (memcmp(data, "DEBUG", 5) == 0 && len >= (int)sizeof(DebugPacket)) {
+    DebugPacket dbg;
+    memset(&dbg, 0, sizeof(dbg));
+    memcpy(&dbg, data, min((int)sizeof(dbg), len));
+    strncpy(pendingDebugPayload, dbg.payload, sizeof(pendingDebugPayload)-1);
+    strncpy(pendingDebugPodId,  dbg.pod_id,  sizeof(pendingDebugPodId)-1);
+    debugReceived = true;
+    Serial.printf("[DBG] from %s: %s\n", pendingDebugPodId, pendingDebugPayload);
   }
 }
 
@@ -265,6 +284,29 @@ void ackCommand(int cmdId) {
   http.addHeader("X-API-Key", apiKey);
   http.addHeader("Content-Type", "application/json");
   http.POST("{}");
+  http.end();
+}
+
+void postDebugLog() {
+  if (apiKey.isEmpty() || WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  String url = serverUrl + "/api/pod-debug";
+  if (!httpBegin(http, url)) return;
+  http.addHeader("X-API-Key", apiKey);
+  http.addHeader("Content-Type", "application/json");
+
+  // Wrap payload: {"pod_id":"...","data":{...}}
+  StaticJsonDocument<384> doc;
+  doc["pod_id"] = pendingDebugPodId;
+  StaticJsonDocument<256> dataDoc;
+  if (deserializeJson(dataDoc, pendingDebugPayload) == DeserializationError::Ok) {
+    doc["data"] = dataDoc.as<JsonObject>();
+  } else {
+    doc["data"] = pendingDebugPayload;
+  }
+  String body;
+  serializeJson(doc, body);
+  http.POST(body);
   http.end();
 }
 
@@ -727,6 +769,12 @@ void loop() {
     lastForward = now;
     if (!apMode) postReading(lastReading);
     hasReading = false; // mark consumed; next packet sets it again
+  }
+
+  // Forward debug log from pod
+  if (debugReceived) {
+    debugReceived = false;
+    if (!apMode) postDebugLog();
   }
 
   // Poll for commands

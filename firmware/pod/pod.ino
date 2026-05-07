@@ -68,6 +68,14 @@ String  currentMode  = DEFAULT_MODE;
 uint32_t readIntervalS   = DEFAULT_READ_INTERVAL_S;
 uint32_t checkIntervalS  = DEFAULT_CHECK_INTERVAL_S;
 bool     sleepIndefinite = false;
+bool     debugMode       = false;
+
+// Diagnostic globals populated by sensor reads — used by sendDebugPacket()
+int   lastMoistureRaw  = 0;
+int   lastMoisturePct  = 0;
+float lastTempC        = 0.0f;
+float lastLux          = 0.0f;
+int   lastTempRetries  = 0;
 
 volatile bool ackReceived     = false;
 volatile bool commandReceived = false;
@@ -95,6 +103,7 @@ void loadConfig() {
   checkIntervalS  = prefs.getUInt("check_interval", DEFAULT_CHECK_INTERVAL_S);
   currentMode     = prefs.getString("mode",         DEFAULT_MODE);
   sleepIndefinite = prefs.getBool("sleep_indef",    false);
+  debugMode       = prefs.getBool("debug",          false);
   podId           = prefs.getString("pod_id",       "pod-default");
   size_t macLen   = prefs.getBytesLength("bridge_mac");
   if (macLen == 6) prefs.getBytes("bridge_mac", bridgeMac, 6);
@@ -154,11 +163,10 @@ void initSensors() {
 }
 
 int readMoisturePercent() {
-  // Average 10 samples to reduce ESP32 ADC noise
   long sum = 0;
   for (int i = 0; i < 10; i++) { sum += analogRead(PIN_MOISTURE); delay(5); }
-  int raw = sum / 10;
-  return constrain(map(raw, MOISTURE_DRY_RAW, MOISTURE_WET_RAW, 0, 100), 0, 100);
+  lastMoistureRaw = sum / 10;
+  return constrain(map(lastMoistureRaw, MOISTURE_DRY_RAW, MOISTURE_WET_RAW, 0, 100), 0, 100);
 }
 
 float readLux() {
@@ -168,10 +176,10 @@ float readLux() {
 
 float readTempC() {
   if (!dsOk) return -1000.0f;
-  // Retry up to 3 times — voltage sag during ESP-NOW can drop 1-Wire signal
   float t = DEVICE_DISCONNECTED_C;
+  lastTempRetries = 0;
   for (int attempt = 0; attempt < 3 && t == DEVICE_DISCONNECTED_C; attempt++) {
-    if (attempt > 0) { delay(100); ds18b20.begin(); }
+    if (attempt > 0) { delay(100); ds18b20.begin(); lastTempRetries++; }
     ds18b20.requestTemperatures();
     delay(750);
     t = ds18b20.getTempCByIndex(0);
@@ -195,6 +203,12 @@ typedef struct __attribute__((packed)) {
   char type[8];
   char payload[200];
 } CommandPacket;
+
+typedef struct __attribute__((packed)) {
+  char type[8];    // "DEBUG"
+  char pod_id[24];
+  char payload[200]; // JSON diagnostic string
+} DebugPacket;
 
 void onDataSent(const wifi_tx_info_t* info, esp_now_send_status_t status) {
   ackReceived = (status == ESP_NOW_SEND_SUCCESS);
@@ -247,6 +261,11 @@ bool sendReading() {
   float tempC    = readTempC();
   float lux      = readLux();
 
+  // Cache for debug packet
+  lastMoisturePct = moisture;
+  lastTempC       = tempC;
+  lastLux         = lux;
+
   ReadingPacket p = {};
   strncpy(p.type,   "READING",      sizeof(p.type)-1);
   strncpy(p.pod_id, podId.c_str(),  sizeof(p.pod_id)-1);
@@ -268,6 +287,31 @@ bool sendReading() {
   return ackReceived;
 }
 
+// =================== DEBUG PACKET ===================
+void sendDebugPacket(int moisturePct, float tempC, float lux) {
+  StaticJsonDocument<256> doc;
+  doc["boot"]         = bootCount;
+  doc["m_raw"]        = lastMoistureRaw;
+  doc["m_pct"]        = moisturePct;
+  doc["temp_c"]       = (float)((int)(tempC * 10)) / 10.0f;
+  doc["temp_retries"] = lastTempRetries;
+  doc["lux"]          = (float)((int)(lux * 10)) / 10.0f;
+  doc["veml_ok"]      = vemlOk;
+  doc["ds_ok"]        = dsOk;
+  doc["mode"]         = currentMode;
+  doc["read_s"]       = readIntervalS;
+  doc["check_s"]      = checkIntervalS;
+  doc["sleep_indef"]  = sleepIndefinite;
+
+  DebugPacket pkt = {};
+  strncpy(pkt.type,   "DEBUG",        sizeof(pkt.type)-1);
+  strncpy(pkt.pod_id, podId.c_str(), sizeof(pkt.pod_id)-1);
+  serializeJson(doc, pkt.payload, sizeof(pkt.payload));
+
+  Serial.printf("[DBG] sending: %s\n", pkt.payload);
+  esp_now_send(bridgeMac, (uint8_t*)&pkt, sizeof(pkt));
+}
+
 // =================== COMMAND HANDLER ===================
 void handleCommand(const char* json) {
   StaticJsonDocument<256> doc;
@@ -281,6 +325,7 @@ void handleCommand(const char* json) {
   else if (strcmp(type, "SET_MODE") == 0)          { saveMode(doc["value"]|"NORMAL"); currentMode = doc["value"]|"NORMAL"; }
   else if (strcmp(type, "SLEEP") == 0)             { prefs.begin("ecoadapt",false); prefs.putBool("sleep_indef",true);  prefs.end(); sleepIndefinite=true; }
   else if (strcmp(type, "WAKE") == 0)              { prefs.begin("ecoadapt",false); prefs.putBool("sleep_indef",false); prefs.end(); sleepIndefinite=false; }
+  else if (strcmp(type, "SET_DEBUG") == 0)          { bool v = doc["value"]|false; prefs.begin("ecoadapt",false); prefs.putBool("debug",v); prefs.end(); debugMode=v; Serial.printf("[CMD] debug=%d\n",v); }
   else if (strcmp(type, "REBOOT") == 0)            { delay(200); ESP.restart(); }
   else if (strcmp(type, "RESET_CONFIG") == 0)      { resetConfig(); delay(200); ESP.restart(); }
 }
@@ -302,6 +347,7 @@ void runWakeCycle() {
   if (shouldRead) {
     initSensors();
     sendReading();
+    if (debugMode) sendDebugPacket(lastMoisturePct, lastTempC, lastLux);
   }
 
   // Listen for commands briefly
