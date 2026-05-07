@@ -38,7 +38,7 @@ flash_bp = Blueprint("flash", __name__)
 
 FIRMWARE_DIR = Path(os.environ.get("FIRMWARE_DIR", "instance/firmware"))
 NVS_NAMESPACE = "ecoadapt"
-NVS_PARTITION_SIZE = 24 * 1024  # 24 KB — matches default ESP-IDF partition table
+NVS_PARTITION_SIZE = 20 * 1024  # 20 KB — matches partitions.bin (0x5000)
 
 # --------------------------------------------------------------------------
 # NVS partition builder
@@ -56,9 +56,10 @@ NVS_PARTITION_SIZE = 24 * 1024  # 24 KB — matches default ESP-IDF partition ta
 # Python NVS writer below. It supports the subset we need.
 
 def _crc32(data: bytes) -> int:
-    """ESP-IDF uses CRC32 with polynomial 0x04C11DB7, init 0xFFFFFFFF, reflected."""
+    """ESP-IDF's esp_rom_crc32_le: reflected CRC-32, init=0xFFFFFFFF, no final XOR.
+    Python's binascii.crc32 applies a final XOR with 0xFFFFFFFF, so we invert."""
     import binascii
-    return binascii.crc32(data) & 0xFFFFFFFF
+    return (binascii.crc32(data) ^ 0xFFFFFFFF) & 0xFFFFFFFF
 
 
 def build_nvs_image(values: dict) -> bytes:
