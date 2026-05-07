@@ -904,6 +904,14 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
   min-width: 52px;
   text-align: right;
 }
+.interval-num {
+  width: 72px !important;
+  padding: 4px 8px !important;
+  font-size: 13px !important;
+  font-family: 'DM Mono', monospace;
+  margin-top: 0 !important;
+  text-align: center;
+}
 
 /* Mode buttons */
 .mode-buttons {
@@ -1294,8 +1302,11 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
           <label class="form-label">Read Interval</label>
           <div class="range-row">
             <input type="range" class="form-range" id="readInterval"
-                  min="60" max="3600" step="60" value="300"
-                  oninput="document.getElementById('readIntervalVal').textContent=formatInterval(this.value)">
+                  min="60" max="3600" value="300"
+                  oninput="syncIntervalFromSlider('readInterval','readIntervalNum','readIntervalVal')">
+            <input type="number" class="form-input interval-num" id="readIntervalNum"
+                  min="60" max="86400" value="300" title="seconds"
+                  oninput="syncIntervalFromNum('readInterval','readIntervalNum','readIntervalVal')">
             <span class="range-val" id="readIntervalVal">5 min</span>
           </div>
         </div>
@@ -1304,8 +1315,11 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
           <label class="form-label">Command Check Interval</label>
           <div class="range-row">
             <input type="range" class="form-range" id="checkInterval"
-                  min="10" max="300" step="10" value="30"
-                  oninput="document.getElementById('checkIntervalVal').textContent=formatInterval(this.value)">
+                  min="10" max="300" value="30"
+                  oninput="syncIntervalFromSlider('checkInterval','checkIntervalNum','checkIntervalVal')">
+            <input type="number" class="form-input interval-num" id="checkIntervalNum"
+                  min="5" max="3600" value="30" title="seconds"
+                  oninput="syncIntervalFromNum('checkInterval','checkIntervalNum','checkIntervalVal')">
             <span class="range-val" id="checkIntervalVal">30 sec</span>
           </div>
         </div>
@@ -1973,10 +1987,14 @@ async function loadPlantConfig() {
 
   document.getElementById("plantName").value         = data.name || "";
   document.getElementById("customPersonality").value = data.personality || "";
-  document.getElementById("readInterval").value      = data.read_interval || 300;
-  document.getElementById("checkInterval").value     = data.check_interval || 30;
-  document.getElementById("readIntervalVal").textContent  = formatInterval(data.read_interval || 300);
-  document.getElementById("checkIntervalVal").textContent = formatInterval(data.check_interval || 30);
+  const ri = data.read_interval  || 300;
+  const ci = data.check_interval || 30;
+  document.getElementById("readInterval").value       = Math.min(ri, 3600);
+  document.getElementById("readIntervalNum").value    = ri;
+  document.getElementById("readIntervalVal").textContent  = formatInterval(ri);
+  document.getElementById("checkInterval").value      = Math.min(ci, 300);
+  document.getElementById("checkIntervalNum").value   = ci;
+  document.getElementById("checkIntervalVal").textContent = formatInterval(ci);
   document.getElementById("headerPlantName").textContent  = data.name || "My Plant";
   document.getElementById("speechPlantName").textContent  = data.name || "My Plant";
 
@@ -2043,8 +2061,8 @@ async function savePlantConfig() {
 
 async function savePodSettings() {
   const payload = {
-    read_interval:  parseInt(document.getElementById("readInterval").value),
-    check_interval: parseInt(document.getElementById("checkInterval").value),
+    read_interval:  parseInt(document.getElementById("readIntervalNum").value)  || 300,
+    check_interval: parseInt(document.getElementById("checkIntervalNum").value) || 30,
     mode: currentMode
   };
 
@@ -2090,9 +2108,11 @@ function setMode(mode) {
   setModeUI(mode);
   const p = MODE_PRESETS[mode];
   if (p) {
-    document.getElementById("readInterval").value  = p.read;
-    document.getElementById("checkInterval").value = p.check;
+    document.getElementById("readInterval").value      = Math.min(p.read, 3600);
+    document.getElementById("readIntervalNum").value   = p.read;
     document.getElementById("readIntervalVal").textContent  = formatInterval(p.read);
+    document.getElementById("checkInterval").value     = Math.min(p.check, 300);
+    document.getElementById("checkIntervalNum").value  = p.check;
     document.getElementById("checkIntervalVal").textContent = formatInterval(p.check);
   }
 }
@@ -2132,6 +2152,21 @@ function switchTab(name) {
 // ═══════════════════════════════════
 // UTILS
 // ═══════════════════════════════════
+function syncIntervalFromSlider(sliderId, numId, valId) {
+  const v = parseInt(document.getElementById(sliderId).value);
+  document.getElementById(numId).value = v;
+  document.getElementById(valId).textContent = formatInterval(v);
+}
+
+function syncIntervalFromNum(sliderId, numId, valId) {
+  const slider = document.getElementById(sliderId);
+  let v = parseInt(document.getElementById(numId).value) || parseInt(slider.min);
+  v = Math.max(parseInt(slider.min), v);
+  // Clamp slider display to its max; actual value stored in number input
+  slider.value = Math.min(v, parseInt(slider.max));
+  document.getElementById(valId).textContent = formatInterval(v);
+}
+
 function formatInterval(s) {
   s = parseInt(s);
   if (s < 60)   return `${s} sec`;
