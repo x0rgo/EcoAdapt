@@ -290,6 +290,7 @@ const Pet = (() => {
 
   function onClick() {
     if (state === S.NIGHT) return;
+    if (typeof ClickGame !== 'undefined') ClickGame.tick();
     face('happy');
     anime({
       targets: petGroup,
