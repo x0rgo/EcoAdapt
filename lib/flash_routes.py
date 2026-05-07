@@ -126,14 +126,15 @@ def build_nvs_image(values: dict) -> bytes:
             value = str(value)
         vb = value.encode('utf-8') + b'\x00'  # NUL-terminated as ESP-IDF does
         size = len(vb)
-        # pad to multiple of 32
+        # pad to multiple of 32 — use 0xFF to match erased flash state
         pad = (-size) % ENTRY_SIZE
-        vb_padded = vb + b'\x00' * pad
+        vb_padded = vb + b'\xFF' * pad
         n_data_entries = len(vb_padded) // ENTRY_SIZE
         span = 1 + n_data_entries
 
         # data8 = size (u16), reserved (u16=0xFFFF), crc32 of the string data
-        data_crc = _crc32(vb_padded)
+        # ESP-IDF computes data CRC over `size` bytes only (not padded) — see nvs_storage.cpp
+        data_crc = _crc32(vb)
         data8 = struct.pack('<HHI', size, 0xFFFF, data_crc)
 
         entries.append(make_entry(NS_INDEX, 0x21, span, 0xFF, key, data8))
