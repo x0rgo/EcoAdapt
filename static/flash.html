@@ -352,7 +352,7 @@ $('flashBtn').addEventListener('click', async () => {
     const { ESPLoader, Transport } = await import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.5/+esm');
     const port = await navigator.serial.requestPort({});
     transport = new Transport(port, true);
-    const esploader = new ESPLoader({ transport, baudrate: 460800, terminal: {
+    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal: {
       clean(){ $('log').textContent=''; }, writeLine: logLine, write(d){ $('log').textContent+=d; }
     }});
     setStatus('Connecting to ESP32…', 'info');
@@ -403,7 +403,7 @@ $('eraseBtn').addEventListener('click', async () => {
     const { ESPLoader, Transport } = await import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.5/+esm');
     const port = await navigator.serial.requestPort({});
     transport = new Transport(port, true);
-    const esploader = new ESPLoader({ transport, baudrate: 460800, terminal: {
+    const esploader = new ESPLoader({ transport, baudrate: 115200, terminal: {
       clean(){ $('log').textContent=''; }, writeLine: logLine, write(d){ $('log').textContent+=d; }
     }});
     await esploader.main();
