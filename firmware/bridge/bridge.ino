@@ -29,6 +29,7 @@
 #include <WiFiClientSecure.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include <Update.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <NimBLEDevice.h>
@@ -38,6 +39,7 @@
 #define AP_PASS            ""           // open AP for setup
 #define DEFAULT_SERVER_URL "https://ecoadapt.onrender.com"
 #define POLL_INTERVAL_MS   5000
+#define OTA_CHECK_INTERVAL_MS (3600000UL)  // check for firmware updates every hour
 #define LED_BUILTIN        8    // XIAO ESP32-C3
 #define BLE_PROV_TIMEOUT_MS 60000      // 60s BLE provisioning window before falling back to AP
 
@@ -59,7 +61,9 @@ uint8_t podMac[6] = {0};
 bool podPaired = false;
 
 bool   apMode = false;
-unsigned long lastPoll = 0;
+unsigned long lastPoll    = 0;
+unsigned long lastOtaCheck = 0;
+String firmwareVersion    = "";
 
 // ---------- Packet structs (must match pod) ----------
 typedef struct __attribute__((packed)) {
@@ -86,10 +90,11 @@ unsigned long lastReadingMs = 0;
 // =================== NVS ===================
 void loadConfig() {
   prefs.begin("ecoadapt", true);
-  wifiSsid  = prefs.getString("wifi_ssid",  "");
-  wifiPass  = prefs.getString("wifi_pass",  "");
-  apiKey    = prefs.getString("api_key",    "");
-  serverUrl = prefs.getString("server_url", DEFAULT_SERVER_URL);
+  wifiSsid        = prefs.getString("wifi_ssid",   "");
+  wifiPass        = prefs.getString("wifi_pass",   "");
+  apiKey          = prefs.getString("api_key",     "");
+  serverUrl       = prefs.getString("server_url",  DEFAULT_SERVER_URL);
+  firmwareVersion = prefs.getString("fw_version",  "");
   size_t macLen = prefs.getBytesLength("pod_mac");
   if (macLen == 6) {
     prefs.getBytes("pod_mac", podMac, 6);
@@ -301,6 +306,99 @@ void pollCommands() {
     }
   }
   http.end();
+}
+
+// =================== OTA ===================
+void saveFirmwareVersion(const String& v) {
+  prefs.begin("ecoadapt", false);
+  prefs.putString("fw_version", v);
+  prefs.end();
+  firmwareVersion = v;
+}
+
+void performOTA(const String& binUrl, const String& newVersion) {
+  Serial.printf("[OTA] downloading %s\n", binUrl.c_str());
+
+  WiFiClientSecure sc;
+  sc.setInsecure();
+  sc.setTimeout(60);
+
+  HTTPClient http;
+  if (!http.begin(sc, binUrl)) {
+    Serial.println("[OTA] begin FAIL");
+    return;
+  }
+  http.addHeader("X-API-Key", apiKey);
+
+  int code = http.GET();
+  if (code != 200) {
+    Serial.printf("[OTA] HTTP %d\n", code);
+    http.end();
+    return;
+  }
+
+  int len = http.getSize();
+  if (len <= 0) {
+    Serial.println("[OTA] no content-length");
+    http.end();
+    return;
+  }
+  Serial.printf("[OTA] size=%d bytes\n", len);
+
+  if (!Update.begin(len)) {
+    Serial.printf("[OTA] Update.begin FAIL: %s\n", Update.errorString());
+    http.end();
+    return;
+  }
+
+  size_t written = Update.writeStream(*http.getStreamPtr());
+  Serial.printf("[OTA] written=%u\n", written);
+
+  if (!Update.end(true)) {
+    Serial.printf("[OTA] Update.end FAIL: %s\n", Update.errorString());
+    http.end();
+    return;
+  }
+
+  http.end();
+  saveFirmwareVersion(newVersion);
+  Serial.println("[OTA] success — rebooting");
+  delay(200);
+  ESP.restart();
+}
+
+void checkForOTA() {
+  if (apiKey.isEmpty() || WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  String url = serverUrl + "/api/firmware/version?kind=bridge";
+  if (!httpBegin(http, url)) return;
+  http.addHeader("X-API-Key", apiKey);
+
+  int code = http.GET();
+  if (code != 200) { http.end(); return; }
+
+  String body = http.getString();
+  http.end();
+
+  StaticJsonDocument<128> doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok) return;
+
+  String serverVersion = doc["version"] | "";
+  if (serverVersion.isEmpty()) return;
+
+  Serial.printf("[OTA] server=%s local=%s\n", serverVersion.c_str(), firmwareVersion.c_str());
+
+  if (firmwareVersion.isEmpty()) {
+    // Fresh flash — record current version, no update needed
+    saveFirmwareVersion(serverVersion);
+    return;
+  }
+
+  if (serverVersion != firmwareVersion) {
+    Serial.println("[OTA] update available — applying");
+    performOTA(serverUrl + "/firmware/bridge.bin", serverVersion);
+  }
 }
 
 // =================== BLE PROVISIONING ===================
@@ -635,6 +733,12 @@ void loop() {
   if (!apMode && now - lastPoll > POLL_INTERVAL_MS) {
     lastPoll = now;
     pollCommands();
+  }
+
+  // OTA version check (once per hour)
+  if (!apMode && now - lastOtaCheck > OTA_CHECK_INTERVAL_MS) {
+    lastOtaCheck = now;
+    checkForOTA();
   }
 
   delay(5);

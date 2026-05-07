@@ -28,6 +28,7 @@ import os
 import struct
 import zipfile
 import hashlib
+import functools
 from pathlib import Path
 from flask import (
     Blueprint, send_file, send_from_directory, jsonify, request,
@@ -247,6 +248,20 @@ def serve_firmware(filename):
         p, mimetype="application/octet-stream",
         as_attachment=False, download_name=filename
     )
+
+
+@flash_bp.route("/api/firmware/version")
+def firmware_version():
+    """Return MD5 hash of the requested firmware binary for OTA version checks."""
+    kind = request.args.get("kind", "bridge")
+    if kind not in ("bridge", "pod"):
+        abort(400)
+    try:
+        data = _firmware_path(f"{kind}.bin").read_bytes()
+        h = hashlib.md5(data).hexdigest()
+        return jsonify({"version": h, "kind": kind, "size": len(data)})
+    except Exception:
+        abort(404, description=f"{kind}.bin not built yet")
 
 
 @flash_bp.route("/api/me/flash-config")
