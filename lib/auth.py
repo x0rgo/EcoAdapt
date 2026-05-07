@@ -32,6 +32,47 @@ def init_users_db():
     """)
     conn.commit()
     conn.close()
+    seed_admin_user()
+
+
+def seed_admin_user():
+    """Create or update the single admin account from environment variables.
+
+    Set ADMIN_USERNAME, ADMIN_PASSWORD, and ADMIN_API_KEY in your environment
+    (or Render dashboard). The API key is stable as long as the env var doesn't
+    change, surviving DB wipes on ephemeral filesystems.
+    """
+    username = os.environ.get("ADMIN_USERNAME")
+    password = os.environ.get("ADMIN_PASSWORD")
+    api_key  = os.environ.get("ADMIN_API_KEY")
+
+    if not (username and password and api_key):
+        return  # env vars not set — skip (manual registration still works locally)
+
+    existing = get_user_by_username(username)
+    conn = get_db()
+    try:
+        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        if not existing:
+            conn.execute(
+                "INSERT INTO users (username, password, api_key) VALUES (?,?,?)",
+                (username, hashed, api_key)
+            )
+            conn.commit()
+            user = get_user_by_username(username)
+            conn.execute("INSERT OR IGNORE INTO plant_config (user_id) VALUES (?)", (user["id"],))
+            conn.commit()
+            print(f"[AUTH] Admin user '{username}' created.")
+        else:
+            # Ensure the API key and password stay in sync with env vars
+            conn.execute(
+                "UPDATE users SET api_key=?, password=? WHERE username=?",
+                (api_key, hashed, username)
+            )
+            conn.commit()
+            print(f"[AUTH] Admin user '{username}' synced.")
+    finally:
+        conn.close()
 
 def get_user_by_username(username):
     conn = get_db()
@@ -274,13 +315,7 @@ body {
     <button class="btn" type="submit">{{ mode == 'register' and 'Create Account' or 'Sign In' }}</button>
   </form>
 
-  <div class="link">
-    {% if mode == 'register' %}
-      Already have an account? <a href="/login">Sign in</a>
-    {% else %}
-      Don't have an account? <a href="/register">Create one</a>
-    {% endif %}
-  </div>
+  <div class="link"></div>
 </div>
 </body>
 </html>
@@ -313,33 +348,7 @@ def login_page():
 
 @auth.route("/register", methods=["GET", "POST"])
 def register_page():
-    if session.get("user_id"):
-        return redirect("/")
-
-    error = None
-    if request.method == "POST":
-        username = request.form.get("username", "").strip().lower()
-        password = request.form.get("password", "")
-        confirm  = request.form.get("confirm_password", "")
-
-        if len(username) < 3:
-            error = "Username must be at least 3 characters."
-        elif len(password) < 6:
-            error = "Password must be at least 6 characters."
-        elif password != confirm:
-            error = "Passwords do not match."
-        elif get_user_by_username(username):
-            error = "Username already taken."
-        else:
-            user_id, result = create_user(username, password)
-            if user_id:
-                session["user_id"] = user_id
-                session["username"] = username
-                return redirect("/")
-            else:
-                error = f"Registration failed: {result}"
-
-    return render_template_string(LOGIN_HTML, mode="register", error=error)
+    return redirect("/login")
 
 
 @auth.route("/logout")
