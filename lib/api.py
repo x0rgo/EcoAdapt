@@ -184,7 +184,7 @@ def update_plant_config():
                                        user_id=user["id"])
 
     if "mode" in data:
-        queue_command("SET_MODE", f'{{"mode": "{data["mode"]}"}}', user["id"])
+        queue_command("SET_MODE", f'{{"value": "{data["mode"]}"}}', user["id"])
     if "read_interval" in data:
         queue_command("SET_READ_INTERVAL",
                       f'{{"value": {data["read_interval"]}}}', user["id"])

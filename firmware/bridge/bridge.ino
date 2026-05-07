@@ -253,11 +253,20 @@ bool postReading(const ReadingPacket& p) {
   return code >= 200 && code < 300;
 }
 
+void ackCommand(int cmdId) {
+  HTTPClient http;
+  String url = serverUrl + "/api/commands/" + String(cmdId) + "/ack";
+  if (!httpBegin(http, url)) return;
+  http.addHeader("X-API-Key", apiKey);
+  http.addHeader("Content-Type", "application/json");
+  http.POST("{}");
+  http.end();
+}
+
 void pollCommands() {
   if (apiKey.isEmpty() || WiFi.status() != WL_CONNECTED) return;
 
   HTTPClient http;
-
   String url = serverUrl + "/api/commands/pending";
   if (!httpBegin(http, url)) return;
   http.addHeader("X-API-Key", apiKey);
@@ -265,13 +274,29 @@ void pollCommands() {
   int code = http.GET();
   if (code == 200) {
     String body = http.getString();
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<2048> doc;
     if (deserializeJson(doc, body) == DeserializationError::Ok) {
       JsonArray cmds = doc.as<JsonArray>();
       for (JsonObject cmd : cmds) {
-        String s;
-        serializeJson(cmd, s);
-        forwardCommandToPod(s);
+        int    cmdId      = cmd["id"].as<int>();
+        String cmdType    = cmd["command"].as<String>();
+        String cmdPayload = cmd["payload"].as<String>();
+        if (cmdPayload.isEmpty() || cmdPayload == "null") cmdPayload = "{}";
+
+        // Build {"type": <command>, ...payload fields...} for the pod
+        StaticJsonDocument<256> podDoc;
+        podDoc["type"] = cmdType;
+        StaticJsonDocument<128> payloadDoc;
+        if (deserializeJson(payloadDoc, cmdPayload) == DeserializationError::Ok) {
+          for (JsonPair kv : payloadDoc.as<JsonObject>()) {
+            podDoc[kv.key()] = kv.value();
+          }
+        }
+        String podJson;
+        serializeJson(podDoc, podJson);
+        Serial.printf("[CMD] -> pod: %s\n", podJson.c_str());
+        forwardCommandToPod(podJson);
+        ackCommand(cmdId);
       }
     }
   }
