@@ -200,7 +200,21 @@
          <strong>RESET</strong> to enter download mode (the LED will be off).</p>
 
       <button id="flashBtn">⚡ Connect & Flash</button>
-      <button id="eraseBtn" class="secondary" style="margin-top:8px">Erase Flash (optional)</button>
+      <button id="eraseBtn" class="secondary" style="margin-top:8px">🗑️ Erase Flash</button>
+
+      <details style="margin-top:14px;font-size:13px;color:var(--muted)">
+        <summary style="cursor:pointer;font-weight:600;color:var(--ink)">😴 Pod goes to sleep before you can flash?</summary>
+        <div style="margin-top:8px;line-height:1.6">
+          <p style="margin:0 0 6px">The pod firmware deep-sleeps after ~2 seconds. To flash it anyway:</p>
+          <ol style="margin:0;padding-left:18px">
+            <li>Plug in the pod and immediately press <strong>RESET</strong> — this gives you a fresh boot window.</li>
+            <li>Click <strong>Erase Flash</strong> above and connect the port within that 2-second window.<br>
+                <em>(Erasing wipes the firmware so it can't sleep anymore.)</em></li>
+            <li>Once erase is done, click <strong>Connect &amp; Flash</strong> normally — no BOOT/RESET needed.</li>
+          </ol>
+          <p style="margin:8px 0 0">If the erase window is too tight, hold <strong>BOOT</strong> while pressing <strong>RESET</strong> to lock it in download mode before clicking anything.</p>
+        </div>
+      </details>
 
       <div class="progress" id="progressWrap" style="display:none">
         <div class="progress-bar" id="progressBar"></div>
