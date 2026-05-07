@@ -47,6 +47,10 @@ def receive_reading():
 
     store_reading(moisture, temperature, light, battery, user_id)
 
+    # Any successful reading means the bridge is online
+    global _last_bridge_seen
+    _last_bridge_seen = time.time()
+
     reading = {"moisture": moisture, "temperature": temperature,
                "light": light, "battery": battery}
 

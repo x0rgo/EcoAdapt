@@ -58,8 +58,9 @@ Adafruit_VEML7700 veml;
 OneWire           oneWire(PIN_ONEWIRE);
 DallasTemperature ds18b20(&oneWire);
 
-bool vemlOk = false;
-bool dsOk   = false;
+bool  vemlOk  = false;
+bool  dsOk    = false;
+float luxMult = 1.0f;  // calibration multiplier, stored in NVS as "lux_mult"
 
 uint8_t bridgeMac[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 String  podId        = "pod-default";
@@ -96,6 +97,7 @@ void loadConfig() {
   currentMode     = prefs.getString("mode",         DEFAULT_MODE);
   sleepIndefinite = prefs.getBool("sleep_indef",    false);
   podId           = prefs.getString("pod_id",       "pod-default");
+  luxMult         = prefs.getFloat("lux_mult",       1.0f);
   size_t macLen   = prefs.getBytesLength("bridge_mac");
   if (macLen == 6) prefs.getBytes("bridge_mac", bridgeMac, 6);
   prefs.end();
@@ -133,11 +135,9 @@ void resetConfig() {
 void initSensors() {
   Wire.begin(6, 7);
 
-  // VEML7700
+  // VEML7700 — use auto-lux mode so gain/IT are selected per reading
   if (veml.begin()) {
     vemlOk = true;
-    veml.setGain(VEML7700_GAIN_1);
-    veml.setIntegrationTime(VEML7700_IT_100MS);
     Serial.println("[SENS] VEML7700 OK");
   } else {
     Serial.println("[SENS] VEML7700 FAIL");
@@ -163,7 +163,8 @@ int readMoisturePercent() {
 
 float readLux() {
   if (!vemlOk) return -1.0f;
-  return veml.readLux();
+  float raw = veml.readLux(VEML_LUX_AUTO);
+  return raw * luxMult;
 }
 
 float readTempC() {
@@ -281,6 +282,7 @@ void handleCommand(const char* json) {
   else if (strcmp(type, "SET_MODE") == 0)          { saveMode(doc["value"]|"NORMAL"); currentMode = doc["value"]|"NORMAL"; }
   else if (strcmp(type, "SLEEP") == 0)             { prefs.begin("ecoadapt",false); prefs.putBool("sleep_indef",true);  prefs.end(); sleepIndefinite=true; }
   else if (strcmp(type, "WAKE") == 0)              { prefs.begin("ecoadapt",false); prefs.putBool("sleep_indef",false); prefs.end(); sleepIndefinite=false; }
+  else if (strcmp(type, "SET_LUX_MULT") == 0)      { float m = doc["value"]|1.0f; prefs.begin("ecoadapt",false); prefs.putFloat("lux_mult", m); prefs.end(); luxMult = m; }
   else if (strcmp(type, "REBOOT") == 0)            { delay(200); ESP.restart(); }
   else if (strcmp(type, "RESET_CONFIG") == 0)      { resetConfig(); delay(200); ESP.restart(); }
 }
