@@ -70,6 +70,18 @@ ACHIEVEMENTS = {
     "chaos_theory":     {"id":"chaos_theory","name":"Chaos Theory","emoji":"🦋","desc":"Switched plant species 10 times. Make up your mind!","category":"chaos","xp":30},
     "lightning_round":  {"id":"lightning_round","name":"Lightning Round","emoji":"⚡","desc":"Sent 5 chat messages within 60 seconds. Hyperfixation unlocked.","category":"chaos","xp":20},
     "secret_garden":    {"id":"secret_garden","name":"Secret Garden","emoji":"🎮","desc":"Found the hidden minigame. Your plant wonders why you keep clicking it.","category":"chaos","xp":25},
+    "click_100":        {"id":"click_100","name":"Click Frenzy","emoji":"👆","desc":"Clicked the Sundrop plant 100 times.","category":"chaos","xp":10},
+    "click_1000":       {"id":"click_1000","name":"Carpal Tunnel","emoji":"🖱️","desc":"Clicked the Sundrop plant 1,000 times. Stretch your fingers.","category":"chaos","xp":25},
+    "click_10000":      {"id":"click_10000","name":"Monk-like Patience","emoji":"🧘","desc":"Clicked the Sundrop plant 10,000 times. Are you okay?","category":"chaos","xp":75},
+    "earn_1m":          {"id":"earn_1m","name":"Photosynthesis Tycoon","emoji":"💰","desc":"Earned 1,000,000 lifetime sundrops.","category":"chaos","xp":30},
+    "earn_1b":          {"id":"earn_1b","name":"Plant Magnate","emoji":"💎","desc":"Earned 1 billion lifetime sundrops.","category":"chaos","xp":60},
+    "earn_1t":          {"id":"earn_1t","name":"Verdant Trillionaire","emoji":"🪙","desc":"Earned 1 trillion lifetime sundrops. The market cannot contain you.","category":"chaos","xp":120},
+    "buy_all":          {"id":"buy_all","name":"Garden Master","emoji":"🏡","desc":"Owned at least one of every Sundrop building.","category":"chaos","xp":50},
+    "mass_prod":        {"id":"mass_prod","name":"Mass Production","emoji":"🏭","desc":"Owned 100 of a single Sundrop building.","category":"chaos","xp":40},
+    "pest_control":     {"id":"pest_control","name":"Pest Control","emoji":"🛡️","desc":"Defeated your first garden pest.","category":"chaos","xp":15},
+    "exterminator":     {"id":"exterminator","name":"Exterminator","emoji":"🧯","desc":"Defeated 10 garden pests.","category":"chaos","xp":35},
+    "apex":             {"id":"apex","name":"Apex Predator","emoji":"🦁","desc":"Defeated 100 garden pests. Nature fears you.","category":"chaos","xp":80},
+    "method":           {"id":"method","name":"Scientific Method","emoji":"🔬","desc":"Bought every Sundrop Garden upgrade.","category":"chaos","xp":100},
 }
 
 # ─────────────────────────────────────────────────────────

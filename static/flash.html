@@ -331,7 +331,7 @@ $('flashBtn').addEventListener('click', async () => {
   setStatus('Loading flasher library…', 'info');
   let transport;
   try {
-    const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.4.5/lib/index.js?module');
+    const { ESPLoader, Transport } = await import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.5/+esm');
     const port = await navigator.serial.requestPort({});
     transport = new Transport(port, true);
     const esploader = new ESPLoader({ transport, baudrate: 460800, terminal: {
@@ -382,7 +382,7 @@ $('eraseBtn').addEventListener('click', async () => {
   setStatus('Loading flasher library…', 'info');
   let transport;
   try {
-    const { ESPLoader, Transport } = await import('https://unpkg.com/esptool-js@0.4.5/lib/index.js?module');
+    const { ESPLoader, Transport } = await import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.5/+esm');
     const port = await navigator.serial.requestPort({});
     transport = new Transport(port, true);
     const esploader = new ESPLoader({ transport, baudrate: 460800, terminal: {

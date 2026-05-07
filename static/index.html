@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta name="theme-color" content="#0d1a0f">
 <title>EcoAdapt</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
@@ -197,12 +198,17 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-body {
+html, body {
   background: var(--bg);
+  min-height: 100vh;
+  min-width: 320px;
+}
+
+body {
   color: var(--text);
   font-family: 'DM Sans', sans-serif;
-  min-height: 100vh;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* Grain */
@@ -289,7 +295,14 @@ nav {
   padding: 0 32px;
   background: var(--s1);
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: sticky;
+  top: 65px;
+  z-index: 9;
 }
+nav::-webkit-scrollbar { display: none; }
 
 .nav-tab {
   padding: 12px 20px;
@@ -306,6 +319,8 @@ nav {
   border-left: none;
   border-right: none;
   font-family: 'DM Mono', monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-tab:hover { color: var(--text); }
@@ -326,9 +341,25 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
 
 @media (max-width: 768px) {
   .live-grid { grid-template-columns: 1fr; }
-  header { padding: 16px 20px; }
-  nav { padding: 0 20px; }
-  main { padding: 20px; }
+  header { padding: 12px 16px; }
+  nav { padding: 0 12px; top: 56px; }
+  main { padding: 16px 14px; }
+  .nav-tab { padding: 11px 14px; font-size: 11px; }
+  .logo { font-size: 18px; }
+  .logo-leaf { width: 24px; height: 24px; font-size: 12px; }
+  .header-right { gap: 10px; }
+  .bridge-status { font-size: 10px; }
+  .plant-name-display { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  header { padding: 10px 12px; }
+  .logo { font-size: 16px; gap: 8px; }
+  .logo-leaf { width: 22px; height: 22px; }
+  .bridge-status span:not(.status-dot) { display: none; }
+  .plant-name-display { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  main { padding: 12px 10px; }
+  .nav-tab { padding: 10px 11px; font-size: 10px; letter-spacing: 0.03em; }
 }
 
 /* Sensor card */

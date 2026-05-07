@@ -295,14 +295,26 @@ def achievements():
     return jsonify(get_all_achievements(user["id"])), 200
 
 
-@api.route("/api/achievements/unlock-garden", methods=["POST"])
+_GAME_ACHIEVEMENT_IDS = {
+    "secret_garden", "click_100", "click_1000", "click_10000",
+    "earn_1m", "earn_1b", "earn_1t",
+    "buy_all", "mass_prod", "method",
+    "pest_control", "exterminator", "apex",
+}
+
+
+@api.route("/api/achievements/unlock-game", methods=["POST"])
 @login_required
-def unlock_garden():
+def unlock_game_achievement():
     user = get_current_user()
+    body = request.get_json(force=True, silent=True) or {}
+    ach_id = (body.get("id") or "").strip()
+    if ach_id not in _GAME_ACHIEVEMENT_IDS:
+        return jsonify({"error": "invalid achievement id"}), 400
     from lib.achievements import unlock, get_achievement_details
-    if unlock("secret_garden", user["id"]):
+    if unlock(ach_id, user["id"]):
         from lib.ws import socketio
-        socketio.emit("achievement", get_achievement_details("secret_garden"))
+        socketio.emit("achievement", get_achievement_details(ach_id))
     return jsonify({"ok": True}), 200
 
 
