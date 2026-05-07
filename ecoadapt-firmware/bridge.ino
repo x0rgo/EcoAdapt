@@ -41,9 +41,9 @@
 #define BLE_PROV_TIMEOUT_MS 60000      // 60s BLE provisioning window before falling back to AP
 
 // BLE provisioning UUIDs (random, but stable so the dashboard can scan for them)
-#define BLE_SVC_UUID       "ec0adap1-2025-4b1d-9e91-100000000000"
-#define BLE_CHR_WIFI_UUID  "ec0adap1-2025-4b1d-9e91-100000000001"  // write: JSON {ssid,pass,api_key?,server_url?}
-#define BLE_CHR_STATUS_UUID "ec0adap1-2025-4b1d-9e91-100000000002" // notify: status string
+#define BLE_SVC_UUID       "ec0adab1-2025-4b1d-9e91-100000000000"
+#define BLE_CHR_WIFI_UUID  "ec0adab1-2025-4b1d-9e91-100000000001"  // write: JSON {ssid,pass,api_key?,server_url?}
+#define BLE_CHR_STATUS_UUID "ec0adab1-2025-4b1d-9e91-100000000002" // notify: status string
 
 // ---------- Globals ----------
 Preferences prefs;
