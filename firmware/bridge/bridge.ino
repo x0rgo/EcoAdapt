@@ -93,6 +93,12 @@ ReadingPacket lastReading = {};
 bool hasReading = false;
 unsigned long lastReadingMs = 0;
 
+// Pending command retransmit — cleared when pod sends ACK
+String pendingPodCmd      = "";
+unsigned long pendingPodCmdAt = 0;
+static const unsigned long CMD_RETRY_MS    = 5000;   // resend every 5s
+static const unsigned long CMD_EXPIRE_MS   = 300000; // give up after 5 min
+
 // Debug log buffering
 char    pendingDebugPayload[200] = {0};
 char    pendingDebugPodId[24]    = {0};
@@ -164,6 +170,9 @@ void onDataRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
     strncpy(pendingDebugPodId,  dbg.pod_id,  sizeof(pendingDebugPodId)-1);
     debugReceived = true;
     Serial.printf("[DBG] from %s: %s\n", pendingDebugPodId, pendingDebugPayload);
+  } else if (memcmp(data, "ACK", 3) == 0) {
+    pendingPodCmd = "";
+    Serial.println("[CMD] pod ACK — cleared pending");
   }
 }
 
@@ -343,6 +352,8 @@ void pollCommands() {
         serializeJson(podDoc, podJson);
         Serial.printf("[CMD] -> pod: %s\n", podJson.c_str());
         forwardCommandToPod(podJson);
+        pendingPodCmd   = podJson;
+        pendingPodCmdAt = millis();
         ackCommand(cmdId);
       }
     }
@@ -781,6 +792,19 @@ void loop() {
   if (!apMode && now - lastPoll > POLL_INTERVAL_MS) {
     lastPoll = now;
     pollCommands();
+  }
+
+  // Retransmit pending command until pod ACKs
+  static unsigned long lastCmdRetry = 0;
+  if (!pendingPodCmd.isEmpty() && now - lastCmdRetry > CMD_RETRY_MS) {
+    lastCmdRetry = now;
+    if (now - pendingPodCmdAt > CMD_EXPIRE_MS) {
+      pendingPodCmd = "";
+      Serial.println("[CMD] retransmit expired");
+    } else {
+      Serial.println("[CMD] retransmit");
+      forwardCommandToPod(pendingPodCmd);
+    }
   }
 
   // OTA version check (once per hour)

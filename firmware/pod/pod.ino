@@ -210,6 +210,11 @@ typedef struct __attribute__((packed)) {
   char payload[200]; // JSON diagnostic string
 } DebugPacket;
 
+typedef struct __attribute__((packed)) {
+  char type[8];    // "ACK"
+  char pod_id[24];
+} AckPacket;
+
 void onDataSent(const wifi_tx_info_t* info, esp_now_send_status_t status) {
   ackReceived = (status == ESP_NOW_SEND_SUCCESS);
   Serial.printf("[ESPNOW] send status=%d\n", status);
@@ -287,6 +292,15 @@ bool sendReading() {
   return ackReceived;
 }
 
+// =================== ACK ===================
+void sendAck() {
+  AckPacket pkt = {};
+  strncpy(pkt.type,   "ACK",         sizeof(pkt.type)-1);
+  strncpy(pkt.pod_id, podId.c_str(), sizeof(pkt.pod_id)-1);
+  esp_now_send(bridgeMac, (uint8_t*)&pkt, sizeof(pkt));
+  Serial.println("[ACK] sent");
+}
+
 // =================== DEBUG PACKET ===================
 void sendDebugPacket(int moisturePct, float tempC, float lux) {
   StaticJsonDocument<256> doc;
@@ -354,6 +368,7 @@ void runWakeCycle() {
   uint32_t t0 = millis();
   while (millis() - t0 < 1500) {
     if (commandReceived) {
+      sendAck();  // ACK before exec so REBOOT can still reply
       handleCommand(pendingCommand);
       commandReceived = false;
       t0 = millis(); // extend window for chained commands
