@@ -342,6 +342,15 @@ function u8ToBinaryString(u8) {
   return s;
 }
 
+// Split a large binary into 64 KB chunks so each flashDeflBegin only erases
+// ~1 second of flash sectors instead of timing out on 1.4 MB all at once.
+function chunkBinary(u8, baseAddr, chunkSize = 64 * 1024) {
+  const out = [];
+  for (let off = 0; off < u8.length; off += chunkSize)
+    out.push({ data: u8ToBinaryString(u8.subarray(off, off + chunkSize)), address: baseAddr + off });
+  return out;
+}
+
 // Pre-load esptool-js the moment the page opens so it's ready when a button is clicked.
 // Dynamic import() inside a click handler can expire the browser's user-gesture window
 // before requestPort() is called, causing it to silently fail.
@@ -384,10 +393,10 @@ $('flashBtn').addEventListener('click', async () => {
         { data: u8ToBinaryString(bootloader), address: 0x0000 },
         { data: u8ToBinaryString(partitions), address: 0x8000 },
         { data: u8ToBinaryString(nvs),        address: 0x9000 },
-        { data: u8ToBinaryString(app),        address: 0x10000 },
+        ...chunkBinary(app, 0x10000),
       ],
       flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep',
-      eraseAll: false, compress: false,
+      eraseAll: false, compress: true,
       reportProgress: (_, written, total) => setProgress(Math.round(written/total*100)),
       calculateMD5Hash: () => '',
     });
