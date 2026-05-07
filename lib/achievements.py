@@ -69,6 +69,7 @@ ACHIEVEMENTS = {
     # ───────── Chaos ─────────
     "chaos_theory":     {"id":"chaos_theory","name":"Chaos Theory","emoji":"🦋","desc":"Switched plant species 10 times. Make up your mind!","category":"chaos","xp":30},
     "lightning_round":  {"id":"lightning_round","name":"Lightning Round","emoji":"⚡","desc":"Sent 5 chat messages within 60 seconds. Hyperfixation unlocked.","category":"chaos","xp":20},
+    "secret_garden":    {"id":"secret_garden","name":"Secret Garden","emoji":"🎮","desc":"Found the hidden minigame. Your plant wonders why you keep clicking it.","category":"chaos","xp":25},
 }
 
 # ─────────────────────────────────────────────────────────

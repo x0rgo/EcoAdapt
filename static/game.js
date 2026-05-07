@@ -346,7 +346,10 @@ const ClickGame = (() => {
     } else {
       overlay.style.display = 'flex';
     }
-    if (firstTime && typeof Pet !== 'undefined') Pet.onAchievement();
+    if (firstTime) {
+      if (typeof Pet !== 'undefined') Pet.onAchievement();
+      fetch('/api/achievements/unlock-garden', { method: 'POST' }).catch(()=>{});
+    }
     renderStats();
     renderShop();
     startLoop();

@@ -295,6 +295,17 @@ def achievements():
     return jsonify(get_all_achievements(user["id"])), 200
 
 
+@api.route("/api/achievements/unlock-garden", methods=["POST"])
+@login_required
+def unlock_garden():
+    user = get_current_user()
+    from lib.achievements import unlock, get_achievement_details
+    if unlock("secret_garden", user["id"]):
+        from lib.ws import socketio
+        socketio.emit("achievement", get_achievement_details("secret_garden"))
+    return jsonify({"ok": True}), 200
+
+
 @api.route("/api/speak", methods=["POST"])
 @login_required
 def speak():
