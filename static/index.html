@@ -288,6 +288,28 @@ header {
   color: var(--amber);
 }
 
+.logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 1;
+  background: transparent;
+  transition: all 0.15s;
+}
+
+.logout-btn:hover {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(180, 60, 60, 0.08);
+}
+
 /* Nav tabs */
 nav {
   display: flex;
@@ -1009,6 +1031,7 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
       <div class="status-dot" id="statusDot"></div>
       <span id="statusText">connecting</span>
     </div>
+    <a href="/logout" class="logout-btn" title="Log out">⏻</a>
   </div>
 </header>
 
