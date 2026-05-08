@@ -43,7 +43,7 @@
 #define POLL_INTERVAL_MS   5000
 #define OTA_CHECK_INTERVAL_MS (3600000UL)  // check for firmware updates every hour
 #define LED_BUILTIN        8    // XIAO ESP32-C3
-#define BLE_PROV_TIMEOUT_MS 60000      // 60s BLE provisioning window before falling back to AP
+#define BLE_PROV_TIMEOUT_MS 120000   // 120s BLE provisioning window before falling back to AP
 
 // BLE provisioning UUIDs (random, but stable so the dashboard can scan for them)
 #define BLE_SVC_UUID       "ec0adab1-2025-4b1d-9e91-100000000000"
