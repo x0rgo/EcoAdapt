@@ -82,6 +82,11 @@
   iOS Safari does not support it — use the captive portal method on iPhone.
 </div>
 
+<div class="browser-warn" id="loginWarn">
+  ⚠️ You're not logged in. Pairing without an API key means your bridge won't be able to send sensor data to your dashboard.
+  <a href="/login" style="color:#856404;text-decoration:underline">Log in first</a>, then come back to this page.
+</div>
+
 <div class="card">
   <h3 style="margin-top:0">How it works</h3>
   <ol>
@@ -134,10 +139,13 @@ async function loadConfig() {
     const r = await fetch('/api/me/flash-config', { credentials: 'include' });
     if (r.ok) {
       const j = await r.json();
-      userApiKey = j.api_key;
+      userApiKey = j.api_key || '';
       userServerUrl = j.server_url || window.location.origin;
     }
-  } catch (e) { /* not logged in is ok */ }
+  } catch (e) { /* network error — leave userApiKey empty */ }
+  if (!userApiKey) {
+    $('loginWarn').classList.add('show');
+  }
 }
 loadConfig();
 

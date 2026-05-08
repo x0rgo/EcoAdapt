@@ -365,8 +365,11 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
   gap: 20px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 540px) {
   .live-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
   header { padding: 12px 16px; }
   nav { padding: 0 12px; top: 56px; }
   main { padding: 16px 14px; }
@@ -1057,8 +1060,7 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
     </div>
     <div class="ach-toast-xp" id="achToastXp">+0 XP</div>
   </div>
-  <button class="nav-tab" onclick="switchTab('pet')">Pet</button>
-  <button class="nav-tab active" onclick="switchTab('live')">Live</button>
+  <button class="nav-tab active" onclick="switchTab('plant')">Plant</button>
   <button class="nav-tab" onclick="switchTab('history')">History</button>
   <button class="nav-tab" onclick="switchTab('settings')">Settings</button>
   <button class="nav-tab" onclick="switchTab('achievements')">Achievements</button>
@@ -1066,9 +1068,44 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
 
 <main>
 
-  <!-- ═══ LIVE TAB ═══ -->
-  <div class="tab-panel active" id="tab-live">
+  <!-- ═══ PLANT TAB (merged Pet + Live) ═══ -->
+  <div class="tab-panel active" id="tab-plant">
+
+    <!-- Hero strip: pet character (left) + moisture gauge (right) -->
     <div class="live-grid">
+
+      <!-- Pet character + stage + happiness -->
+      <div class="sensor-card" style="text-align:center;padding:20px 20px 24px">
+
+        <svg id="petSvg" viewBox="0 0 200 260" width="160" height="208">
+          <g id="petGroup"></g>
+        </svg>
+
+        <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--green)" id="stageName">Seed</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace" id="stageDesc">Just starting out.</div>
+
+        <div style="margin-top:16px">
+          <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:6px;letter-spacing:0.1em;text-transform:uppercase">XP to next stage</div>
+          <div style="background:var(--s3);border-radius:4px;height:6px;overflow:hidden">
+            <div id="xpBar" style="height:100%;background:linear-gradient(90deg,var(--green2),var(--green));border-radius:4px;transition:width 1s ease;width:0%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px">
+            <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="xpVal">0 XP</span>
+            <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="nextStageVal">100 XP</span>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;display:flex;align-items:center;justify-content:center;gap:14px">
+          <div style="font-family:'DM Mono',monospace;font-size:36px;font-weight:500;color:var(--text)" id="happinessVal">100</div>
+          <div style="text-align:left">
+            <div style="font-size:18px" id="happinessEmoji">😊</div>
+            <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px" id="moodLabel">happy</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;background:var(--s3);border-radius:4px;height:6px;overflow:hidden">
+          <div id="happinessBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:100%;background:linear-gradient(90deg,var(--green2),var(--green))"></div>
+        </div>
+      </div>
 
       <!-- Moisture gauge -->
       <div class="sensor-card moisture-card">
@@ -1091,33 +1128,72 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
         </div>
       </div>
 
-      <!-- Sensor row -->
-      <div class="sensor-row" style="grid-column:1/-1">
+    </div>
 
-        <div class="sensor-card">
-          <div class="sensor-label">Temperature</div>
-          <div class="sensor-value" id="tempVal">--<span class="sensor-unit">°C</span></div>
-          <div class="sensor-bar"><div class="sensor-bar-fill bar-amber" id="tempBar" style="width:0%"></div></div>
-        </div>
+    <!-- Vitals row: temp / light / battery -->
+    <div class="sensor-row" style="margin-top:20px">
 
-        <div class="sensor-card">
-          <div class="sensor-label">Light</div>
-          <div class="sensor-value" id="lightVal">--<span class="sensor-unit">lux</span></div>
-          <div class="sensor-bar"><div class="sensor-bar-fill bar-teal" id="lightBar" style="width:0%"></div></div>
-        </div>
+      <div class="sensor-card">
+        <div class="sensor-label">Temperature</div>
+        <div class="sensor-value" id="tempVal">--<span class="sensor-unit">°C</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill bar-amber" id="tempBar" style="width:0%"></div></div>
+      </div>
 
-        <div class="sensor-card">
-          <div class="sensor-label">Pod Battery</div>
-          <div class="sensor-value" id="battVal">--<span class="sensor-unit">%</span></div>
-          <div class="sensor-bar"><div class="sensor-bar-fill bar-green" id="battBar" style="width:0%"></div></div>
-        </div>
+      <div class="sensor-card">
+        <div class="sensor-label">Light</div>
+        <div class="sensor-value" id="lightVal">--<span class="sensor-unit">lux</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill bar-teal" id="lightBar" style="width:0%"></div></div>
+      </div>
 
+      <div class="sensor-card">
+        <div class="sensor-label">Pod Battery</div>
+        <div class="sensor-value" id="battVal">--<span class="sensor-unit">%</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill bar-green" id="battBar" style="width:0%"></div></div>
       </div>
 
     </div>
 
+    <!-- Needs (gamified vitals) -->
+    <div class="sensor-card" style="margin-top:20px">
+      <div class="sensor-label" style="margin-bottom:16px">Needs</div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:12px;color:var(--text)">💧 Thirst (hydration)</span>
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--green)" id="thirstVal">--</span>
+          </div>
+          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
+            <div id="thirstBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,#1a5080,var(--teal))"></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:12px;color:var(--text)">☀️ Energy (light)</span>
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--amber)" id="energyVal">--</span>
+          </div>
+          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
+            <div id="energyBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,var(--amber2),var(--amber))"></div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:12px;color:var(--text)">🌡️ Comfort (temperature)</span>
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--purple)" id="comfortVal">--</span>
+          </div>
+          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
+            <div id="comfortBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,#3a2a6a,var(--purple))"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Speech bubble -->
-    <div class="speech-section">
+    <div class="speech-section" style="margin-top:20px">
       <div class="speech-card">
         <div class="speech-header">
           <div class="plant-avatar" id="plantAvatar">🌿</div>
@@ -1141,7 +1217,7 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
           <div class="chat-msg plant" style="font-style:italic;opacity:0.6">Talk to your plant...</div>
         </div>
         <div class="chat-input-row">
-          <input class="chat-input" id="chatInput" placeholder="Say something to your plant..." 
+          <input class="chat-input" id="chatInput" placeholder="Say something to your plant..."
                  onkeydown="if(event.key==='Enter') sendChat()">
           <button class="chat-send" onclick="sendChat()">↑</button>
         </div>
@@ -1153,6 +1229,20 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
       <div class="recs-title">Care Recommendations</div>
       <div id="recsList">
         <div class="rec-item" style="color:var(--muted)">Loading recommendations...</div>
+      </div>
+    </div>
+
+    <!-- Stage progression -->
+    <div class="sensor-card" style="margin-top:20px">
+      <div class="sensor-label" style="margin-bottom:16px">Life Stages</div>
+      <div style="display:flex;gap:0;position:relative" id="stagesRow"></div>
+    </div>
+
+    <!-- Care log -->
+    <div class="sensor-card" style="margin-top:20px">
+      <div class="sensor-label" style="margin-bottom:12px">Care Log</div>
+      <div id="careLog" style="display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;color:var(--muted)">No care actions recorded yet.</div>
       </div>
     </div>
 
@@ -1409,183 +1499,6 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
     </div>
   </div>
 
-  <!-- ═══ PET TAB ═══ -->
-  <div class="tab-panel" id="tab-pet">
-
-    <!-- Stage + happiness -->
-    <div class="live-grid">
-
-      <div class="sensor-card" style="text-align:center;padding:20px 20px 28px">
-
-        <svg id="petSvg" viewBox="0 0 200 260" width="160" height="208">
-          <g id="petGroup">
-            <!-- Pot -->
-            <rect x="48" y="183" width="104" height="14" rx="7" fill="#8B5E3C"/>
-            <rect x="52" y="184" width="48" height="6" rx="3" fill="#A07040" opacity="0.45"/>
-            <path d="M60,197 L140,197 L130,252 L70,252 Z" fill="#C1694F"/>
-            <path d="M67,197 L78,197 L72,249 L63,244 Z" fill="#D4845A" opacity="0.4"/>
-            <path d="M133,197 L140,197 L130,252 L125,252 Z" fill="#A04535" opacity="0.28"/>
-            <ellipse cx="100" cy="192" rx="44" ry="8" fill="#4E2E14"/>
-            <ellipse cx="100" cy="190" rx="38" ry="4.5" fill="#5C3A1E" opacity="0.55"/>
-
-            <!-- Stem -->
-            <path d="M100,190 C98,170 102,152 99,132 C97,116 101,98 100,82" stroke="#4A7C40" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-
-            <!-- Leaf 1 — lower left (position wrapper + rotatable inner) -->
-            <g transform="translate(86,155)">
-              <g id="leaf1" style="transform-origin:0px 12px;transform:rotate(-40deg)">
-                <path class="petLeaf" d="M0,14 C-17,5 -15,-18 0,-22 C15,-18 17,5 0,14" fill="#5A9E4A" stroke="#3E7234" stroke-width="0.8"/>
-                <path d="M0,14 C0,4 0,-14 0,-22" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
-              </g>
-            </g>
-
-            <!-- Leaf 2 — lower right -->
-            <g transform="translate(114,140)">
-              <g id="leaf2" style="transform-origin:0px 12px;transform:rotate(50deg)">
-                <path class="petLeaf" d="M0,14 C-17,5 -15,-18 0,-22 C15,-18 17,5 0,14" fill="#6DB35A" stroke="#3E7234" stroke-width="0.8"/>
-                <path d="M0,14 C0,4 0,-14 0,-22" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
-              </g>
-            </g>
-
-            <!-- Leaf 3 — upper left -->
-            <g transform="translate(80,118)">
-              <g id="leaf3" style="transform-origin:0px 11px;transform:rotate(-52deg)">
-                <path class="petLeaf" d="M0,13 C-15,4 -13,-16 0,-20 C13,-16 15,4 0,13" fill="#4E9040" stroke="#3E7234" stroke-width="0.8"/>
-                <path d="M0,13 C0,3 0,-13 0,-20" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
-              </g>
-            </g>
-
-            <!-- Leaf 4 — upper right (small) -->
-            <g transform="translate(118,105)">
-              <g id="leaf4" style="transform-origin:0px 10px;transform:rotate(38deg)">
-                <path class="petLeaf" d="M0,12 C-13,4 -11,-14 0,-18 C11,-14 13,4 0,12" fill="#5A9E4A" stroke="#3E7234" stroke-width="0.8"/>
-                <path d="M0,12 C0,3 0,-12 0,-18" stroke="#3E7234" stroke-width="0.6" fill="none" opacity="0.45"/>
-              </g>
-            </g>
-
-            <!-- Face (centered at 100,118) -->
-            <g transform="translate(100,118)">
-              <!-- Blush cheeks -->
-              <ellipse cx="-22" cy="7" rx="7" ry="5" fill="#FF9999" opacity="0.28"/>
-              <ellipse cx="22"  cy="7" rx="7" ry="5" fill="#FF9999" opacity="0.28"/>
-
-              <!-- Left eye -->
-              <g transform="translate(-15,0)">
-                <g id="eyeL">
-                  <circle r="9" fill="white"/>
-                  <circle id="pupilL" cx="0" cy="0" r="5" fill="#3a3020"/>
-                  <circle cx="2.5" cy="-2.5" r="1.8" fill="white" opacity="0.9"/>
-                </g>
-              </g>
-
-              <!-- Right eye -->
-              <g transform="translate(15,0)">
-                <g id="eyeR">
-                  <circle r="9" fill="white"/>
-                  <circle id="pupilR" cx="0" cy="0" r="5" fill="#3a3020"/>
-                  <circle cx="2.5" cy="-2.5" r="1.8" fill="white" opacity="0.9"/>
-                </g>
-              </g>
-
-              <!-- Eyebrows -->
-              <path id="browL" d="M -22,-11 Q -14,-15 -7,-11" stroke="#5a4030" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-              <path id="browR" d="M 7,-11 Q 14,-15 22,-11"   stroke="#5a4030" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-
-              <!-- Mouth -->
-              <path id="petMouth" d="M -9,14 Q 0,19 9,14" stroke="#5a4030" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-            </g>
-
-            <!-- Particle effects layer -->
-            <g id="petFx"></g>
-          </g>
-        </svg>
-
-        <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--green)" id="stageName">Seed</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace" id="stageDesc">Just starting out.</div>
-        <div style="margin-top:20px">
-          <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:6px;letter-spacing:0.1em;text-transform:uppercase">XP to next stage</div>
-          <div style="background:var(--s3);border-radius:4px;height:6px;overflow:hidden">
-            <div id="xpBar" style="height:100%;background:linear-gradient(90deg,var(--green2),var(--green));border-radius:4px;transition:width 1s ease;width:0%"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-top:4px">
-            <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="xpVal">0 XP</span>
-            <span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace" id="nextStageVal">100 XP</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="sensor-card">
-        <div class="sensor-label">Happiness</div>
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-          <div style="font-family:'DM Mono',monospace;font-size:48px;font-weight:500;color:var(--text)" id="happinessVal">100</div>
-          <div>
-            <div style="font-size:20px" id="happinessEmoji">😊</div>
-            <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px" id="moodLabel">happy</div>
-          </div>
-        </div>
-        <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
-          <div id="happinessBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:100%;background:linear-gradient(90deg,var(--green2),var(--green))"></div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Needs bars -->
-    <div class="sensor-card" style="margin-top:20px">
-      <div class="sensor-label" style="margin-bottom:16px">Needs</div>
-
-      <div style="display:flex;flex-direction:column;gap:14px">
-
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-            <span style="font-size:12px;color:var(--text)">💧 Thirst (hydration)</span>
-            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--green)" id="thirstVal">--</span>
-          </div>
-          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
-            <div id="thirstBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,#1a5080,var(--teal))"></div>
-          </div>
-        </div>
-
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-            <span style="font-size:12px;color:var(--text)">☀️ Energy (light)</span>
-            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--amber)" id="energyVal">--</span>
-          </div>
-          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
-            <div id="energyBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,var(--amber2),var(--amber))"></div>
-          </div>
-        </div>
-
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-            <span style="font-size:12px;color:var(--text)">🌡️ Comfort (temperature)</span>
-            <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--purple)" id="comfortVal">--</span>
-          </div>
-          <div style="background:var(--s3);border-radius:4px;height:8px;overflow:hidden">
-            <div id="comfortBar" style="height:100%;border-radius:4px;transition:width 1s ease;width:0%;background:linear-gradient(90deg,#3a2a6a,var(--purple))"></div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Stage progression -->
-    <div class="sensor-card" style="margin-top:20px">
-      <div class="sensor-label" style="margin-bottom:16px">Life Stages</div>
-      <div style="display:flex;gap:0;position:relative" id="stagesRow">
-      </div>
-    </div>
-
-    <!-- Care log -->
-    <div class="sensor-card" style="margin-top:20px">
-      <div class="sensor-label" style="margin-bottom:12px">Care Log</div>
-      <div id="careLog" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:12px;color:var(--muted)">No care actions recorded yet.</div>
-      </div>
-    </div>
-
-  </div>
-
     <!-- ═══ ACHIEVEMENTS TAB ═══ -->
   <div class="tab-panel" id="tab-achievements">
 
@@ -1699,8 +1612,8 @@ function updateReadings(d) {
   document.getElementById("lightBar").style.width =
     Math.min(100, (l / 20000) * 100) + "%";
 
-  // Battery
-  const b = d.battery ?? 100;
+  // Battery — TEMP: pinned to 100% for science-fair demo (revert: const b = d.battery ?? 100;)
+  const b = 100;
   document.getElementById("battVal").innerHTML =
     `${Math.round(b)}<span class="sensor-unit">%</span>`;
   const battFill = document.getElementById("battBar");
@@ -1970,6 +1883,7 @@ async function loadSpecies() {
 function updatePersonalityPreview() {
   const id = document.getElementById("speciesSelect").value;
   currentSpecies = id; // keep global in sync
+  if (typeof Pet !== "undefined" && Pet.setSpecies) Pet.setSpecies(id);
   const s  = species.find(x => x.id === id);
   document.getElementById("personalityPreview").textContent =
     s ? s.personality_preview : "";
@@ -2160,7 +2074,7 @@ function switchTab(name) {
   document.getElementById("tab-" + name).classList.add("active");
   event.target.classList.add("active");
   if (name === "history") loadHistory(24, document.querySelector(".range-btn"));
-  if (name === "pet") loadTamagotchi();
+  if (name === "plant") loadTamagotchi();
   if (name === "achievements") loadAchievements();
 }
 
