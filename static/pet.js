@@ -186,15 +186,17 @@ const Pet = (() => {
   function buildPetSvg(species) {
     const cfg = SPECIES_VISUALS[species] || SPECIES_VISUALS.pothos;
 
-    // Pot is shared across all species (just colors change)
+    // Pot — rim derives from the pot palette so non-terracotta species
+    // (white peace lily, gray succulent, dark zz_plant, etc) don't look
+    // like they have a brown lip glued on top.
     const pot = `
-      <rect x="48" y="183" width="104" height="14" rx="7" fill="#8B5E3C"/>
-      <rect x="52" y="184" width="48" height="6" rx="3" fill="#A07040" opacity="0.45"/>
+      <rect x="48" y="183" width="104" height="14" rx="7" fill="${cfg.pot.lo}"/>
+      <rect x="52" y="184" width="48" height="6" rx="3" fill="${cfg.pot.hi}" opacity="0.55"/>
       <path d="M60,197 L140,197 L130,252 L70,252 Z" fill="${cfg.pot.body}"/>
       <path d="M67,197 L78,197 L72,249 L63,244 Z" fill="${cfg.pot.hi}" opacity="0.4"/>
-      <path d="M133,197 L140,197 L130,252 L125,252 Z" fill="${cfg.pot.lo}" opacity="0.28"/>
-      <ellipse cx="100" cy="192" rx="44" ry="8" fill="#4E2E14"/>
-      <ellipse cx="100" cy="190" rx="38" ry="4.5" fill="#5C3A1E" opacity="0.55"/>
+      <path d="M133,197 L140,197 L130,252 L125,252 Z" fill="${cfg.pot.lo}" opacity="0.4"/>
+      <ellipse cx="100" cy="192" rx="40" ry="6" fill="#4E2E14"/>
+      <ellipse cx="100" cy="190" rx="34" ry="3.5" fill="#5C3A1E" opacity="0.55"/>
     `;
 
     // Body — special case for cactus, otherwise stem + leaves
