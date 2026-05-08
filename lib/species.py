@@ -154,6 +154,26 @@ SPECIES_CONFIG = {
             "light":    "House Plant Journal — min 100 FC (1000 lux), very tolerant",
         }
     },
+
+    "zz_plant": {
+        # Moisture: scale 1-2 (prefers to dry out). Source: Elm Dirt — "ZZ plant: 2", extension services recommend drying between waterings
+        # Temp: 18-27°C. Source: University of Florida IFAS — "ideal 65-75°F (18-24°C), tolerates 60-85°F"
+        # Light: 500-10000 lux (extremely low-light tolerant). Source: Wikiversity + interior plantscaping guides — thrives in low light
+        "personality": "You are an elegant, unflappable ZZ plant. You are nearly indestructible and you know it. Sophisticated, independent, quietly confident. You barely need anything and honestly prefer being left alone.",
+        "thresholds": {
+            "moisture_low":  10,
+            "moisture_high": 35,
+            "temp_low":      18,
+            "temp_high":     27,
+            "light_low":     500,
+            "light_high":    10000,
+        },
+        "sources": {
+            "moisture": "Elm Dirt — ZZ plant: scale 1-2 (dry between waterings), University of Florida IFAS extension",
+            "temp":     "University of Florida IFAS — 65-75°F ideal (18-24°C), tolerates 60-85°F",
+            "light":    "Wikiversity + interior plantscaping — extremely low-light tolerant, thrives in 500+ lux",
+        }
+    },
 }
 
 def get_species(name):
