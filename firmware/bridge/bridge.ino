@@ -529,24 +529,62 @@ public:
   void onWrite(NimBLECharacteristic* chr, NimBLEConnInfo& connInfo) override {
     std::string val = chr->getValue();
     Serial.printf("[BLE] wifi write: %s\n", val.c_str());
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<1024> doc;
     if (deserializeJson(doc, val) != DeserializationError::Ok) {
       _stat->setValue("err:json");
       _stat->notify();
       return;
     }
-    const char* s = doc["ssid"] | "";
-    const char* p = doc["pass"] | "";
+
+    prefs.begin("ecoadapt", false);
+
+    // New format: networks array
+    JsonArray nets = doc["networks"];
+    if (nets && nets.size() > 0) {
+      // Clear old indexed keys first
+      for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        char sk[14], pk[14];
+        snprintf(sk, sizeof(sk), "wifi_ssid_%d", i);
+        snprintf(pk, sizeof(pk), "wifi_pass_%d", i);
+        if (prefs.isKey(sk)) prefs.remove(sk);
+        if (prefs.isKey(pk)) prefs.remove(pk);
+      }
+      // Write new networks
+      int count = 0;
+      for (JsonObject net : nets) {
+        if (count >= MAX_WIFI_NETWORKS) break;
+        const char* s = net["ssid"] | "";
+        if (!s || !*s) continue;
+        char sk[14], pk[14];
+        snprintf(sk, sizeof(sk), "wifi_ssid_%d", count);
+        snprintf(pk, sizeof(pk), "wifi_pass_%d", count);
+        prefs.putString(sk, s);
+        prefs.putString(pk, net["pass"] | "");
+        count++;
+      }
+      if (count == 0) {
+        prefs.end();
+        _stat->setValue("err:no-ssid");
+        _stat->notify();
+        return;
+      }
+    } else {
+      // Legacy format: single ssid/pass
+      const char* s = doc["ssid"] | "";
+      const char* p = doc["pass"] | "";
+      if (!s || !*s) {
+        prefs.end();
+        _stat->setValue("err:no-ssid");
+        _stat->notify();
+        return;
+      }
+      prefs.putString("wifi_ssid_0", s);
+      prefs.putString("wifi_pass_0", p);
+    }
+
+    // Optional api_key and server_url
     const char* k = doc["api_key"] | "";
     const char* u = doc["server_url"] | "";
-    if (!s || !*s) {
-      _stat->setValue("err:no-ssid");
-      _stat->notify();
-      return;
-    }
-    prefs.begin("ecoadapt", false);
-    prefs.putString("wifi_ssid", s);
-    prefs.putString("wifi_pass", p);
     if (k && *k) prefs.putString("api_key", k);
     if (u && *u) prefs.putString("server_url", u);
     prefs.end();
@@ -623,13 +661,12 @@ const char PORTAL_HTML[] PROGMEM = R"HTML(
   .leaf{font-size:32px}
   .row{display:flex;gap:8px;align-items:center}
   .scan{flex:0 0 auto;padding:8px 12px;font-size:12px;background:#e9ecef;color:#1d3557;border-radius:8px;cursor:pointer;border:0}
-  .ok{color:#2d6a4f;font-weight:600;margin-top:12px}
 </style></head>
 <body>
 <div class="card">
   <div class="leaf">🌿</div>
   <h1>EcoAdapt Bridge Setup</h1>
-  <div class="sub">Last-resort WiFi setup. If you've used the web flasher or BLE pairing, you shouldn't need this.</div>
+  <div class="sub">Last-resort WiFi setup. For network management, use the offline dashboard or BLE pairing.</div>
   <form id="f" action="/save" method="POST">
     <label>WiFi network</label>
     <div class="row">
@@ -646,12 +683,11 @@ const char PORTAL_HTML[] PROGMEM = R"HTML(
   </form>
 </div>
 <script>
-async function scan(){
-  const r = await fetch('/scan'); const j = await r.json();
-  const sel = document.getElementById('ssid'); sel.innerHTML='';
-  j.networks.forEach(n=>{
-    const o = document.createElement('option'); o.value=n.ssid;
-    o.textContent = n.ssid + ' ('+n.rssi+' dBm)'; sel.appendChild(o);
+function scan(){
+  fetch('/scan').then(r=>r.json()).then(j=>{
+    const sel=document.getElementById('ssid');sel.innerHTML='';
+    j.networks.forEach(n=>{const o=document.createElement('option');o.value=n.ssid;
+    o.textContent=n.ssid+' ('+n.rssi+' dBm)';sel.appendChild(o);});
   });
 }
 scan();
@@ -667,7 +703,17 @@ const char STATUS_HTML[] PROGMEM = R"HTML(
   .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 4px 16px rgba(0,0,0,.06);margin-bottom:16px}
   h1{margin:0 0 4px} .k{color:#666;font-size:13px} .v{font-size:18px;font-weight:600}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .ok{color:#2d6a4f}.bad{color:#e63946}
+  button{background:#2d6a4f;color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+  button:hover{background:#1b4332}
+  .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center}
+  .modal.show{display:flex}
+  .modal-box{background:#fff;border-radius:16px;padding:20px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto}
+  .modal-box h2{margin:0 0 16px}
+  .wifi-item{border:1px solid #eee;border-radius:8px;padding:10px;margin:10px 0;display:flex;justify-content:space-between;align-items:center}
+  .wifi-item span{font-size:13px}
+  input{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin:8px 0;font-size:13px}
+  .add-btn{width:100%;margin-top:10px;padding:10px}
+  .wifi-list{max-height:250px;overflow-y:auto}
 </style></head>
 <body>
 <div class="card">
@@ -686,8 +732,24 @@ const char STATUS_HTML[] PROGMEM = R"HTML(
   <div class="k">WiFi</div><div class="v" id="w">—</div>
   <div class="k" style="margin-top:8px">Pod paired</div><div class="v" id="p">—</div>
   <div class="k" style="margin-top:8px">Last reading</div><div class="v" id="r">—</div>
-  <p><a href="/setup">Reconfigure WiFi & API key</a></p>
+  <p style="margin:12px 0 0"><button onclick="openWifiModal()">📡 Manage Networks</button></p>
+  <p><a href="/setup">Reconfigure API key</a></p>
 </div>
+
+<div class="modal" id="wifiModal">
+  <div class="modal-box">
+    <h2>WiFi Networks</h2>
+    <div class="wifi-list" id="wifiList"></div>
+    <input id="newSsid" placeholder="Network name (SSID)" autocomplete="off">
+    <input id="newPass" type="password" placeholder="Password (leave empty for open)">
+    <button class="add-btn" onclick="addWifiNetwork()">+ Add Network</button>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button style="flex:1;background:#2d6a4f" onclick="saveWifiNetworks()">Save</button>
+      <button style="flex:1;background:#6c757d" onclick="closeWifiModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 async function tick(){
   const r = await fetch('/status'); const j = await r.json();
@@ -700,6 +762,56 @@ async function tick(){
   document.getElementById('r').textContent = j.age_s+' s ago';
 }
 setInterval(tick,3000); tick();
+
+let _wifiNets = [];
+
+async function openWifiModal(){
+  const r = await fetch('/api/wifi/list');
+  const j = await r.json();
+  _wifiNets = j.networks || [];
+  renderWifiList();
+  document.getElementById('wifiModal').classList.add('show');
+}
+
+function closeWifiModal(){
+  document.getElementById('wifiModal').classList.remove('show');
+}
+
+function renderWifiList(){
+  const list = document.getElementById('wifiList');
+  list.innerHTML = '';
+  _wifiNets.forEach((net, i) => {
+    const item = document.createElement('div');
+    item.className = 'wifi-item';
+    item.innerHTML = `<span><strong>${net.ssid}</strong></span><button onclick="removeNet(${i})" style="padding:4px 8px;font-size:11px;background:#e63946">✕</button>`;
+    list.appendChild(item);
+  });
+}
+
+function addWifiNetwork(){
+  const ssid = document.getElementById('newSsid').value.trim();
+  if (!ssid) return;
+  _wifiNets.push({ ssid, pass: document.getElementById('newPass').value });
+  document.getElementById('newSsid').value = '';
+  document.getElementById('newPass').value = '';
+  renderWifiList();
+}
+
+function removeNet(i){
+  _wifiNets.splice(i, 1);
+  renderWifiList();
+}
+
+async function saveWifiNetworks(){
+  if (_wifiNets.length === 0) { alert('Add at least one network'); return; }
+  const r = await fetch('/api/wifi/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ networks: _wifiNets })
+  });
+  if (r.ok) { alert('Networks saved! Bridge will try them on next boot.'); closeWifiModal(); }
+  else alert('Failed to save');
+}
 </script>
 </body></html>
 )HTML";
@@ -757,6 +869,59 @@ void handleStatus() {
   web.send(200, "application/json", out);
 }
 
+void handleWifiList() {
+  StaticJsonDocument<512> doc;
+  JsonArray nets = doc.createNestedArray("networks");
+  for (auto& net : wifiNetworks) {
+    JsonObject o = nets.createNestedObject();
+    o["ssid"] = net.ssid;
+    o["pass"] = net.pass;
+  }
+  String out; serializeJson(doc, out);
+  web.send(200, "application/json", out);
+}
+
+void handleWifiSave() {
+  StaticJsonDocument<1024> doc;
+  if (deserializeJson(doc, web.arg("plain")) != DeserializationError::Ok) {
+    web.send(400, "application/json", "{\"error\":\"json\"}");
+    return;
+  }
+  JsonArray nets = doc["networks"];
+  if (!nets || nets.size() == 0) {
+    web.send(400, "application/json", "{\"error\":\"no-networks\"}");
+    return;
+  }
+
+  prefs.begin("ecoadapt", false);
+  // Clear old indexed keys
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    char sk[14], pk[14];
+    snprintf(sk, sizeof(sk), "wifi_ssid_%d", i);
+    snprintf(pk, sizeof(pk), "wifi_pass_%d", i);
+    if (prefs.isKey(sk)) prefs.remove(sk);
+    if (prefs.isKey(pk)) prefs.remove(pk);
+  }
+  // Write new networks
+  int count = 0;
+  for (JsonObject net : nets) {
+    if (count >= MAX_WIFI_NETWORKS) break;
+    String s = net["ssid"] | "";
+    if (s.isEmpty()) continue;
+    char sk[14], pk[14];
+    snprintf(sk, sizeof(sk), "wifi_ssid_%d", count);
+    snprintf(pk, sizeof(pk), "wifi_pass_%d", count);
+    prefs.putString(sk, s);
+    prefs.putString(pk, net["pass"] | "");
+    count++;
+  }
+  prefs.end();
+
+  // Reload the bank
+  loadConfig();
+  web.send(200, "application/json", "{\"ok\":true}");
+}
+
 void startAP() {
   apMode = true;
   WiFi.mode(WIFI_AP);
@@ -764,21 +929,25 @@ void startAP() {
   IPAddress ip = WiFi.softAPIP();
   Serial.printf("[AP] %s ip=%s\n", AP_SSID, ip.toString().c_str());
   dns.start(53, "*", ip);
-  web.on("/",       handleRoot);
-  web.on("/setup",  handleSetupPage);
-  web.on("/scan",   handleScan);
-  web.on("/save",   HTTP_POST, handleSave);
+  web.on("/",           handleRoot);
+  web.on("/setup",      handleSetupPage);
+  web.on("/scan",       handleScan);
+  web.on("/save",       HTTP_POST, handleSave);
+  web.on("/api/wifi/list", handleWifiList);
+  web.on("/api/wifi/save",  HTTP_POST, handleWifiSave);
   // Captive-portal probes (Apple, Android, Windows)
   web.onNotFound(handlePortal);
   web.begin();
 }
 
 void startStatusServer() {
-  web.on("/",       handleRoot);
-  web.on("/setup",  handleSetupPage);
-  web.on("/scan",   handleScan);
-  web.on("/save",   HTTP_POST, handleSave);
-  web.on("/status", handleStatus);
+  web.on("/",            handleRoot);
+  web.on("/setup",       handleSetupPage);
+  web.on("/scan",        handleScan);
+  web.on("/save",        HTTP_POST, handleSave);
+  web.on("/status",      handleStatus);
+  web.on("/api/wifi/list", handleWifiList);
+  web.on("/api/wifi/save",  HTTP_POST, handleWifiSave);
   web.begin();
   Serial.printf("[HTTP] status server on http://%s/\n",
                 WiFi.localIP().toString().c_str());

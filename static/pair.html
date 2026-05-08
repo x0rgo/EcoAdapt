@@ -55,6 +55,17 @@
   ol { padding-left: 20px; }
   ol li { margin-bottom: 8px; }
   .device-name { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; }
+  .net-row {
+    border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-bottom: 12px;
+  }
+  .net-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; font-size: 13px; font-weight: 600;
+  }
+  .net-del {
+    padding: 4px 10px; font-size: 11px; background: #e63946;
+    color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -82,11 +93,9 @@
 </div>
 
 <div class="card">
-  <h3 style="margin-top:0">WiFi credentials</h3>
-  <label>Network name (SSID)</label>
-  <input id="ssid" placeholder="e.g. MyHomeWiFi" autocomplete="off">
-  <label>Password</label>
-  <input id="pass" type="password" placeholder="Leave empty if open" autocomplete="new-password">
+  <h3 style="margin-top:0">WiFi networks</h3>
+  <div id="netList"></div>
+  <button id="addBtn" type="button" onclick="addNetRow()" style="background:#e9ecef;color:var(--ink);margin-bottom:16px">+ Add another network</button>
   <button id="pairBtn">📡 Pair via Bluetooth</button>
   <div id="status"></div>
 </div>
@@ -132,11 +141,55 @@ async function loadConfig() {
 }
 loadConfig();
 
+// Network list management
+let _netIdx = 0;
+
+function addNetRow(ssid = '', pass = '') {
+  const idx = _netIdx++;
+  const first = $('netList').children.length === 0;
+  const row = document.createElement('div');
+  row.className = 'net-row';
+  row.id = `nr-${idx}`;
+  row.innerHTML = `
+    <div class="net-header">
+      <span>Network ${$('netList').children.length + 1}</span>
+      ${!first ? `<button type="button" class="net-del" onclick="delNetRow(${idx})">✕ Remove</button>` : ''}
+    </div>
+    <input class="net-ssid" placeholder="Network name (SSID)" value="${(ssid||'').replace(/"/g,'&quot;')}" autocomplete="off">
+    <input class="net-pass" type="password" placeholder="Password (leave empty if open)" value="${pass||''}" autocomplete="new-password" style="margin-top:8px">
+  `;
+  $('netList').appendChild(row);
+  renumberNets();
+}
+
+function delNetRow(idx) {
+  const row = $(`nr-${idx}`);
+  if (row) row.remove();
+  renumberNets();
+}
+
+function renumberNets() {
+  const rows = $('netList').querySelectorAll('[id^="nr-"]');
+  rows.forEach((r, i) => {
+    const hdr = r.querySelector('.net-header span');
+    if (hdr) hdr.textContent = `Network ${i + 1}`;
+  });
+  $('addBtn').style.display = rows.length >= 5 ? 'none' : '';
+}
+
+addNetRow(); // Start with one row
+
 $('pairBtn').addEventListener('click', async () => {
-  const ssid = $('ssid').value.trim();
-  const pass = $('pass').value;
-  if (!ssid) {
-    setStatus('Please enter an SSID.', 'error');
+  const rows = $('netList').querySelectorAll('[id^="nr-"]');
+  const networks = [];
+  rows.forEach(row => {
+    const ssid = row.querySelector('.net-ssid').value.trim();
+    const pass = row.querySelector('.net-pass').value;
+    if (ssid) networks.push({ ssid, pass });
+  });
+
+  if (networks.length === 0) {
+    setStatus('Please add at least one network.', 'error');
     return;
   }
 
@@ -162,18 +215,17 @@ $('pairBtn').addEventListener('click', async () => {
         const v = new TextDecoder().decode(e.target.value);
         console.log('[BLE status]', v);
         if (v.startsWith('ok')) {
-          setStatus('✅ Credentials received! Bridge is rebooting and will connect to WiFi shortly.', 'ok');
+          setStatus('✅ Networks received! Bridge is rebooting and will try each one.', 'ok');
         } else if (v.startsWith('err')) {
           setStatus('❌ Bridge reported error: ' + v, 'error');
         }
       });
     } catch (e) { console.warn('no status char', e); }
 
-    setStatus('Sending credentials…', 'info');
+    setStatus('Sending networks…', 'info');
     const wifiChr = await svc.getCharacteristic(WIFI_UUID);
     const payload = {
-      ssid: ssid,
-      pass: pass,
+      networks: networks,
       api_key: userApiKey,
       server_url: userServerUrl
     };
