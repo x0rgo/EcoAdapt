@@ -33,8 +33,10 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <NimBLEDevice.h>
+#include <vector>
 
 // ---------- Defaults ----------
+#define MAX_WIFI_NETWORKS  5
 #define AP_SSID            "EcoAdapt-Setup"
 #define AP_PASS            ""           // open AP for setup
 #define DEFAULT_SERVER_URL "https://ecoadapt.onrender.com"
@@ -48,13 +50,15 @@
 #define BLE_CHR_WIFI_UUID  "ec0adab1-2025-4b1d-9e91-100000000001"  // write: JSON {ssid,pass,api_key?,server_url?}
 #define BLE_CHR_STATUS_UUID "ec0adab1-2025-4b1d-9e91-100000000002" // notify: status string
 
+// ---------- WiFi credential bank ----------
+struct WiFiCred { String ssid; String pass; };
+
 // ---------- Globals ----------
 Preferences prefs;
 WebServer   web(80);
 DNSServer   dns;
 
-String wifiSsid;
-String wifiPass;
+std::vector<WiFiCred> wifiNetworks;  // loaded from NVS; tried in order on boot
 String apiKey;
 String serverUrl = DEFAULT_SERVER_URL;
 uint8_t podMac[6] = {0};
@@ -114,8 +118,6 @@ void loadConfig() {
     prefs.isKey("pod_mac"));
   Serial.printf("[NVS] freeEntries=%u\n", (unsigned)prefs.freeEntries());
 
-  wifiSsid        = prefs.getString("wifi_ssid",   "");
-  wifiPass        = prefs.getString("wifi_pass",   "");
   apiKey          = prefs.getString("api_key",     "");
   serverUrl       = prefs.getString("server_url",  DEFAULT_SERVER_URL);
   firmwareVersion = prefs.getString("fw_version",  "");
@@ -124,22 +126,63 @@ void loadConfig() {
     prefs.getBytes("pod_mac", podMac, 6);
     podPaired = true;
   }
+
+  // Load WiFi bank: try indexed keys wifi_ssid_0..4 first (multi-network format)
+  wifiNetworks.clear();
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    char sk[14], pk[14];
+    snprintf(sk, sizeof(sk), "wifi_ssid_%d", i);
+    snprintf(pk, sizeof(pk), "wifi_pass_%d", i);
+    if (prefs.isKey(sk)) {
+      String s = prefs.getString(sk, "");
+      if (s.length()) {
+        WiFiCred c;
+        c.ssid = s;
+        c.pass = prefs.getString(pk, "");
+        wifiNetworks.push_back(c);
+      }
+    }
+  }
+  // Backward compat: fall back to old single-key format
+  if (wifiNetworks.empty() && prefs.isKey("wifi_ssid")) {
+    String s = prefs.getString("wifi_ssid", "");
+    if (s.length()) {
+      WiFiCred c;
+      c.ssid = s;
+      c.pass = prefs.getString("wifi_pass", "");
+      wifiNetworks.push_back(c);
+    }
+  }
+
   prefs.end();
 
-  Serial.printf("[CFG] ssid=%s api_key=%s url=%s podPaired=%d\n",
-    wifiSsid.c_str(),
+  Serial.printf("[CFG] wifi_networks=%d api_key=%s url=%s podPaired=%d\n",
+    (int)wifiNetworks.size(),
     apiKey.length() ? "(set)" : "(empty)",
     serverUrl.c_str(),
     podPaired ? 1 : 0);
+  for (int i = 0; i < (int)wifiNetworks.size(); i++)
+    Serial.printf("[CFG]   [%d] ssid=%s\n", i, wifiNetworks[i].ssid.c_str());
 }
 
 void saveWifi(const String& ssid, const String& pass) {
+  // Saves as slot 0 (first priority) in the indexed bank.
+  // Existing slots 1-4 are preserved, so the data bank survives BLE/portal config.
   prefs.begin("ecoadapt", false);
-  prefs.putString("wifi_ssid", ssid);
-  prefs.putString("wifi_pass", pass);
+  prefs.putString("wifi_ssid_0", ssid);
+  prefs.putString("wifi_pass_0", pass);
   prefs.end();
-  wifiSsid = ssid;
-  wifiPass = pass;
+  // Reload bank: insert/replace slot 0 at the front
+  bool found = false;
+  for (auto& c : wifiNetworks) {
+    if (c.ssid == ssid) { c.pass = pass; found = true; break; }
+  }
+  if (!found) {
+    WiFiCred c; c.ssid = ssid; c.pass = pass;
+    wifiNetworks.insert(wifiNetworks.begin(), c);
+    if ((int)wifiNetworks.size() > MAX_WIFI_NETWORKS)
+      wifiNetworks.resize(MAX_WIFI_NETWORKS);
+  }
 }
 
 void savePodMac(const uint8_t* mac) {
@@ -233,22 +276,27 @@ void forwardCommandToPod(const String& jsonPayload) {
 }
 
 // =================== WIFI / HTTP ===================
-bool connectWifi(uint32_t timeoutMs = 20000) {
-  if (wifiSsid.isEmpty()) return false;
+bool connectWifi(uint32_t timeoutPerNetMs = 15000) {
+  if (wifiNetworks.empty()) return false;
   WiFi.mode(WIFI_STA);
-  WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-  Serial.printf("[WIFI] connecting to %s\n", wifiSsid.c_str());
-  uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < timeoutMs) {
-    delay(250);
-    Serial.print(".");
+  for (auto& net : wifiNetworks) {
+    if (net.ssid.isEmpty()) continue;
+    Serial.printf("[WIFI] trying %s\n", net.ssid.c_str());
+    WiFi.begin(net.ssid.c_str(), net.pass.c_str());
+    uint32_t t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < timeoutPerNetMs) {
+      delay(250);
+      Serial.print(".");
+    }
+    Serial.println();
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.printf("[WIFI] OK ssid=%s ip=%s\n", net.ssid.c_str(), WiFi.localIP().toString().c_str());
+      return true;
+    }
+    Serial.printf("[WIFI] FAIL %s\n", net.ssid.c_str());
+    WiFi.disconnect(true);
+    delay(100);
   }
-  Serial.println();
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("[WIFI] OK ip=%s\n", WiFi.localIP().toString().c_str());
-    return true;
-  }
-  Serial.println("[WIFI] FAIL");
   return false;
 }
 
@@ -750,8 +798,8 @@ void setup() {
   // Tier 3: Captive portal AP
 
   bool wifiOk = false;
-  if (!wifiSsid.isEmpty()) {
-    Serial.println("[BOOT] tier 1: NVS-staged WiFi");
+  if (!wifiNetworks.empty()) {
+    Serial.println("[BOOT] tier 1: NVS-staged WiFi bank");
     wifiOk = connectWifi();
   }
 

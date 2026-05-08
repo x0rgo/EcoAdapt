@@ -279,8 +279,6 @@ def make_nvs_image():
     body = request.get_json(force=True) or {}
     api_key = body.get("api_key", "").strip()
     server_url = body.get("server_url", "").strip()
-    wifi_ssid = body.get("wifi_ssid", "").strip()
-    wifi_pass = body.get("wifi_pass", "")  # do NOT strip — passwords may have spaces
 
     # Defense: never let a user write someone else's API key by trusting the
     # request body. Pull the canonical key from the session.
@@ -292,15 +290,26 @@ def make_nvs_image():
     if not server_url:
         server_url = request.host_url.rstrip("/")
 
-    # Build the NVS dict. Only include WiFi keys if SSID is set — empty
-    # values in NVS are still readable by the firmware as empty strings.
     nvs_values = {
         "api_key":    api_key,
         "server_url": server_url,
     }
-    if wifi_ssid:
-        nvs_values["wifi_ssid"] = wifi_ssid
-        nvs_values["wifi_pass"] = wifi_pass  # may be empty for open networks
+
+    # WiFi bank: accepts wifi_networks=[{ssid,pass},...] (up to 5).
+    # Also handles legacy single wifi_ssid/wifi_pass for backward compat.
+    wifi_networks = body.get("wifi_networks", [])
+    if not wifi_networks:
+        ssid = body.get("wifi_ssid", "").strip()
+        passwd = body.get("wifi_pass", "")
+        if ssid:
+            wifi_networks = [{"ssid": ssid, "pass": passwd}]
+
+    for i, net in enumerate(wifi_networks[:5]):
+        ssid = (net.get("ssid") or "").strip()
+        passwd = net.get("pass") or ""
+        if ssid:
+            nvs_values[f"wifi_ssid_{i}"] = ssid
+            nvs_values[f"wifi_pass_{i}"] = passwd
 
     try:
         image = build_nvs_image(nvs_values)

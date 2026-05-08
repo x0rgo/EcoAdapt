@@ -177,14 +177,13 @@
       </label>
 
       <div id="wifiFields">
-        <label style="display:block;font-size:13px;font-weight:600;margin-top:12px">Network name (SSID)</label>
-        <input id="wifiSsid" placeholder="e.g. MyHomeWiFi or iPhone-Hotspot" autocomplete="off">
-
-        <label style="display:block;font-size:13px;font-weight:600;margin-top:12px">Password</label>
-        <input id="wifiPass" type="password" placeholder="Leave empty if open network" autocomplete="new-password">
-
+        <div id="wifiList"></div>
+        <button type="button" class="secondary" id="addNetworkBtn"
+          style="margin-top:10px;width:auto;padding:8px 16px;font-size:13px">
+          + Add another network
+        </button>
         <div class="hint">
-          💡 Tip: For a science fair demo, name your phone hotspot something easy to remember and pre-stage it here. The bridge will reconnect every time you turn the hotspot on.
+          💡 Tip: Add multiple networks (home, work, hotspot). The bridge tries each on boot in order until one connects.
         </div>
       </div>
     </div>
@@ -293,6 +292,48 @@ if (!('serial' in navigator)) {
   cb.addEventListener('change', sync); sync();
 })();
 
+// --- WiFi bank (multiple networks) ---
+let _wifiIdx = 0;
+
+function _addWifiRow(ssid, pass) {
+  const idx = _wifiIdx++;
+  const first = $('wifiList').children.length === 0;
+  const row = document.createElement('div');
+  row.id = `wr-${idx}`;
+  row.style.cssText = 'border:1px solid #eee;border-radius:10px;padding:12px;margin-top:10px';
+  row.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:600" class="wlabel">Network ${$('wifiList').children.length + 1}</span>
+      ${!first ? `<button type="button" onclick="_removeWifiRow(${idx})"
+        style="margin:0;width:auto;padding:3px 10px;font-size:12px;background:#f8d7da;color:#721c24;border-radius:6px">
+        ✕ Remove</button>` : ''}
+    </div>
+    <input class="wifi-ssid" placeholder="Network name (SSID)" value="${(ssid||'').replace(/"/g,'&quot;')}" autocomplete="off">
+    <input class="wifi-pass" type="password" placeholder="Password (leave empty if open)" value="${pass||''}" autocomplete="new-password" style="margin-top:8px">
+  `;
+  $('wifiList').appendChild(row);
+  _renumberWifi();
+}
+
+function _removeWifiRow(idx) {
+  const row = $(`wr-${idx}`);
+  if (row) row.remove();
+  _renumberWifi();
+}
+
+function _renumberWifi() {
+  const rows = $('wifiList').querySelectorAll('[id^="wr-"]');
+  rows.forEach((r, i) => {
+    const lbl = r.querySelector('.wlabel');
+    if (lbl) lbl.textContent = `Network ${i + 1}`;
+  });
+  $('addNetworkBtn').style.display = rows.length >= 5 ? 'none' : '';
+}
+
+$('addNetworkBtn').addEventListener('click', () => _addWifiRow());
+
+_addWifiRow();
+
 function logLine(s) {
   const log = $('log');
   log.style.display = 'block';
@@ -313,8 +354,14 @@ async function buildConfigBlob() {
   if (!apiKey || apiKey.startsWith('(')) throw new Error('No API key — please log in first.');
   const payload = { api_key: apiKey, server_url: serverUrl };
   if ($('wifiEnabled').checked) {
-    const ssid = $('wifiSsid').value.trim();
-    if (ssid) { payload.wifi_ssid = ssid; payload.wifi_pass = $('wifiPass').value; }
+    const rows = $('wifiList').querySelectorAll('[id^="wr-"]');
+    const networks = [];
+    rows.forEach(row => {
+      const ssid = row.querySelector('.wifi-ssid').value.trim();
+      const pass = row.querySelector('.wifi-pass').value;
+      if (ssid) networks.push({ ssid, pass });
+    });
+    if (networks.length) payload.wifi_networks = networks;
   }
   const r = await fetch(f().apiBase + '/api/firmware/nvs-image', {
     method: 'POST', credentials: 'include',
