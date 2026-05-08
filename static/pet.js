@@ -25,7 +25,7 @@ const Pet = (() => {
     heartUp:    'M0,13 C-15,4 -13,-16 0,-20 C13,-16 15,4 0,13',
     monstera:   'M0,14 C-21,4 -22,-22 0,-26 C22,-22 21,4 0,14',  // wider
     sword:      'M0,14 C-5,4 -6,-22 0,-26 C6,-22 5,4 0,14',      // narrow pointed
-    fat:        'M0,8 C-9,4 -9,-11 0,-13 C9,-11 9,4 0,8',         // short fleshy
+    fat:        'M0,11 C-13,5 -13,-15 0,-19 C13,-15 13,5 0,11',    // short fleshy (succulent)
     frond:      'M0,16 C-3,8 -4,-22 0,-26 C4,-22 3,8 0,16',       // narrow long
     longLeaf:   'M0,18 C-4,8 -4,-26 0,-30 C4,-26 4,8 0,18',       // very long curve
     oval:       'M0,12 C-10,5 -10,-15 0,-17 C10,-15 10,5 0,12',   // rounded oval
@@ -39,12 +39,13 @@ const Pet = (() => {
     { tx: 118, ty: 105, rot:  38, originY: 10 },
   ];
 
-  // Rosette (succulent) — leaves cluster low and spread radially
+  // Rosette (succulent) — 4 leaves emerge from a central bud at (100, 158)
+  // and fan outward like petals. Leaf bases sit at the bud's edge.
   const ROSETTE_LAYOUT = [
-    { tx: 78,  ty: 175, rot: -78, originY: 8 },
-    { tx: 122, ty: 175, rot:  78, originY: 8 },
-    { tx: 88,  ty: 162, rot: -32, originY: 8 },
-    { tx: 112, ty: 162, rot:  32, originY: 8 },
+    { tx: 88,  ty: 150, rot:  -45, originY: 11 }, // upper-left, tip up-left
+    { tx: 112, ty: 150, rot:   45, originY: 11 }, // upper-right, tip up-right
+    { tx: 88,  ty: 168, rot: -130, originY: 11 }, // lower-left, tip down-left
+    { tx: 112, ty: 168, rot:  130, originY: 11 }, // lower-right, tip down-right
   ];
 
   // Frond layout (fern, zz_plant) — symmetric paired leaves on a stem
@@ -130,6 +131,8 @@ const Pet = (() => {
       stem: null,
       stemColor: null,
       layout: ROSETTE_LAYOUT,
+      facePos: { tx: 100, ty: 158 },
+      centerBud: { cx: 100, cy: 158, rx: 24, ry: 19 },
     },
     fern: {
       leafShape: 'frond',
@@ -214,9 +217,15 @@ const Pet = (() => {
         <circle cx="100" cy="80" r="2.5" fill="#FFE066"/>
       `;
     } else {
-      // Standard: optional stem + 4 leaves
+      // Standard: optional stem + optional center bud + 4 leaves
       if (cfg.stem) {
         body += `<path d="${cfg.stem}" stroke="${cfg.stemColor}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
+      }
+      // Center bud (rosette species like succulent) — rendered before leaves
+      // so leaf bases overlap it and read as petals around a central body.
+      if (cfg.centerBud) {
+        const b = cfg.centerBud;
+        body += `<ellipse cx="${b.cx}" cy="${b.cy}" rx="${b.rx}" ry="${b.ry}" fill="${cfg.leafColors[0]}" stroke="${cfg.leafStroke}" stroke-width="0.8"/>`;
       }
       body += renderLeaf(1, cfg.layout[0], cfg.leafShape, cfg.leafColors[0], cfg.leafStroke);
       body += renderLeaf(2, cfg.layout[1], cfg.leafShape, cfg.leafColors[1], cfg.leafStroke);
@@ -240,9 +249,10 @@ const Pet = (() => {
       }
     }
 
-    // Face (centered at 100,118)
+    // Face — position is per-species (default 100,118; lower for rosettes)
+    const fp = cfg.facePos || { tx: 100, ty: 118 };
     const face = `
-      <g transform="translate(100,118)">
+      <g transform="translate(${fp.tx},${fp.ty})">
         <ellipse cx="-22" cy="7" rx="7" ry="5" fill="#FF9999" opacity="0.28"/>
         <ellipse cx="22"  cy="7" rx="7" ry="5" fill="#FF9999" opacity="0.28"/>
         <g transform="translate(-15,0)">
