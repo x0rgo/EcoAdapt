@@ -106,7 +106,14 @@ bool    debugReceived            = false;
 
 // =================== NVS ===================
 void loadConfig() {
-  prefs.begin("ecoadapt", true);
+  bool ok = prefs.begin("ecoadapt", true);
+  Serial.printf("[NVS] begin(\"ecoadapt\", ro) -> %d\n", ok);
+  Serial.printf("[NVS] isKey: api_key=%d server_url=%d wifi_ssid=%d wifi_pass=%d pod_mac=%d\n",
+    prefs.isKey("api_key"), prefs.isKey("server_url"),
+    prefs.isKey("wifi_ssid"), prefs.isKey("wifi_pass"),
+    prefs.isKey("pod_mac"));
+  Serial.printf("[NVS] freeEntries=%u\n", (unsigned)prefs.freeEntries());
+
   wifiSsid        = prefs.getString("wifi_ssid",   "");
   wifiPass        = prefs.getString("wifi_pass",   "");
   apiKey          = prefs.getString("api_key",     "");
