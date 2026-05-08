@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <meta name="theme-color" content="#0d1a0f">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="EcoAdapt">
 <title>EcoAdapt</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
@@ -1338,6 +1342,22 @@ main { padding: 28px 32px; max-width: 1200px; margin: 0 auto; }
         <button class="save-btn" onclick="savePodSettings()">Save Pod Settings</button>
       </div>
 
+      <!-- Notifications -->
+      <div class="settings-card">
+        <div class="settings-title">Notifications</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+          Get pushed when your plant needs water, gets too hot, or its battery is low.
+          Works in the background on Android. On iPhone, first add this site to your home
+          screen (Share → Add to Home Screen), then open it from there to enable.
+        </div>
+        <div id="pushStatus" style="font-size:12px;color:var(--muted);margin-bottom:10px">…</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="cmd-btn" id="pushEnableBtn" onclick="enablePush()">🔔 Enable Notifications</button>
+          <button class="cmd-btn" id="pushDisableBtn" onclick="disablePush()" style="display:none">🔕 Disable</button>
+          <button class="cmd-btn" id="pushTestBtn" onclick="testPush()" style="display:none">📨 Send Test</button>
+        </div>
+      </div>
+
       <!-- Pod commands -->
       <div class="settings-card">
         <div class="settings-title">Pod Commands</div>
@@ -2416,6 +2436,104 @@ async function init() {
 }
 
 init();
+
+// ───── Web Push ─────
+function _b64ToU8(b64) {
+  const pad = "=".repeat((4 - b64.length % 4) % 4);
+  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(s);
+  const u8 = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
+  return u8;
+}
+
+function _setPushUI(state) {
+  const $s = document.getElementById("pushStatus");
+  const $en = document.getElementById("pushEnableBtn");
+  const $dis = document.getElementById("pushDisableBtn");
+  const $test = document.getElementById("pushTestBtn");
+  if (!$s) return;
+  const subscribed = state === "subscribed";
+  $en.style.display  = subscribed ? "none" : "";
+  $dis.style.display = subscribed ? "" : "none";
+  $test.style.display = subscribed ? "" : "none";
+  $s.textContent = ({
+    unsupported:  "❌ Notifications not supported in this browser.",
+    needs_pwa:    "ℹ️ On iPhone, add to Home Screen first, then open from the icon.",
+    denied:       "🚫 Permission denied. Enable in browser settings.",
+    subscribed:   "✅ Subscribed — you'll get notifications when your plant needs you.",
+    not_subscribed: "🔕 Not subscribed yet."
+  })[state] || "";
+}
+
+async function _pushSupported() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    _setPushUI("unsupported"); return false;
+  }
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (isIOS && !standalone) { _setPushUI("needs_pwa"); return false; }
+  return true;
+}
+
+async function refreshPushUI() {
+  if (!(await _pushSupported())) return;
+  if (Notification.permission === "denied") return _setPushUI("denied");
+  const reg = await navigator.serviceWorker.getRegistration();
+  const sub = reg && await reg.pushManager.getSubscription();
+  _setPushUI(sub ? "subscribed" : "not_subscribed");
+}
+
+async function enablePush() {
+  if (!(await _pushSupported())) return;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return _setPushUI("denied");
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    const { key } = await (await fetch("/api/push/vapid-key")).json();
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _b64ToU8(key),
+    });
+    const r = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(sub),
+    });
+    if (!r.ok) throw new Error("server rejected subscription");
+    _setPushUI("subscribed");
+  } catch (e) {
+    console.error(e);
+    alert("Failed to enable notifications: " + e.message);
+  }
+}
+
+async function disablePush() {
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return refreshPushUI();
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    await fetch("/api/push/unsubscribe", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+    await sub.unsubscribe();
+  }
+  refreshPushUI();
+}
+
+async function testPush() {
+  const r = await fetch("/api/push/test", { method: "POST" });
+  const j = await r.json();
+  if (!j.sent) alert("No active subscriptions on the server. Try Disable + Enable again.");
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+window.addEventListener("load", refreshPushUI);
 </script>
 </body>
   <div class="ach-toast" id="achToast">

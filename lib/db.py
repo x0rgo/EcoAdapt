@@ -134,6 +134,12 @@ def init_db():
     except Exception as e:
         print(f"Achievements DB init error: {e}")
 
+    try:
+        from lib.push import init_push_db
+        init_push_db()
+    except Exception as e:
+        print(f"Push DB init error: {e}")
+
 # ─────────────────────────────────────────────────────────
 # READINGS
 # ─────────────────────────────────────────────────────────

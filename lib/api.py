@@ -76,6 +76,22 @@ def receive_reading():
         except Exception as e:
             print(f"Speech generation error: {e}")
 
+        try:
+            from lib.push import send_to_user
+            plant_name = plant.get("name") or "Your plant"
+            push_titles = {
+                "moisture_low":  f"💧 {plant_name} needs water",
+                "moisture_high": f"🚫 {plant_name} is overwatered",
+                "temp_low":      f"🥶 {plant_name} is cold",
+                "temp_high":     f"🌡️ {plant_name} is overheating",
+                "battery_low":   "🔋 Pod battery low",
+            }
+            title = push_titles.get(t["type"])
+            if title:
+                send_to_user(user_id, title, t["message"], kind=t["type"])
+        except Exception as e:
+            print(f"Push notify error: {e}")
+
     # Check achievements
     try:
         from lib.achievements import check_sensor_achievements
@@ -466,6 +482,55 @@ def get_speak_stream(stream_id):
 # ─────────────────────────────────────────────────────────
 # PUBLIC READ-ONLY VIEW
 # ─────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────
+# WEB PUSH
+# ─────────────────────────────────────────────────────────
+
+@api.route("/api/push/vapid-key", methods=["GET"])
+def push_vapid_key():
+    from lib.push import VAPID_PUBLIC
+    return jsonify({"key": VAPID_PUBLIC}), 200
+
+
+@api.route("/api/push/subscribe", methods=["POST"])
+@login_required
+def push_subscribe():
+    from lib.push import subscribe
+    user = get_current_user()
+    sub  = request.get_json(silent=True) or {}
+    if not subscribe(user["id"], sub):
+        return jsonify({"error": "invalid subscription"}), 400
+    return jsonify({"ok": True}), 200
+
+
+@api.route("/api/push/unsubscribe", methods=["POST"])
+@login_required
+def push_unsubscribe():
+    from lib.push import unsubscribe
+    user = get_current_user()
+    body = request.get_json(silent=True) or {}
+    endpoint = body.get("endpoint", "")
+    if not endpoint:
+        return jsonify({"error": "missing endpoint"}), 400
+    unsubscribe(user["id"], endpoint)
+    return jsonify({"ok": True}), 200
+
+
+@api.route("/api/push/test", methods=["POST"])
+@login_required
+def push_test():
+    from lib.push import send_to_user, _last_push
+    user = get_current_user()
+    plant = get_plant(user["id"])
+    name = plant.get("name") or "Your plant"
+    _last_push.pop((user["id"], "test"), None)  # bypass debounce
+    sent = send_to_user(user["id"],
+        f"🌱 {name} says hi",
+        "Test notification — push is working!",
+        kind="test")
+    return jsonify({"ok": True, "sent": sent}), 200
+
 
 @api.route("/api/public/<username>", methods=["GET"])
 def public_plant(username):
